@@ -28,7 +28,9 @@ export function obfuscateId(id: number | number[]): string {
     
     return sqids.encode(ids);
   } catch (error) {
-    console.error("[Obfuscate ID Error]:", error);
+    if (process.env.NODE_ENV !== "test") {
+      console.error("[Obfuscate ID Error]:", error);
+    }
     throw error;
   }
 }
@@ -50,7 +52,9 @@ export function deobfuscateId(hash: string): number | null {
     
     return result[0];
   } catch (error) {
-    console.error("[Deobfuscate ID Error]:", error);
+    if (process.env.NODE_ENV !== "test") {
+      console.error("[Deobfuscate ID Error]:", error);
+    }
     return null;
   }
 }
@@ -66,7 +70,9 @@ export function deobfuscateIds(hash: string): number[] {
     if (!hash || typeof hash !== "string") return [];
     return sqids.decode(hash.trim());
   } catch (error) {
-    console.error("[Deobfuscate IDs Error]:", error);
+    if (process.env.NODE_ENV !== "test") {
+      console.error("[Deobfuscate IDs Error]:", error);
+    }
     return [];
   }
 }

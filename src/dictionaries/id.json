@@ -1,6 +1,7 @@
 {
   "common": {
-    "appName": "Amir App",
+    "appName": "MarkIt Studio",
+    "appTagline": "Alat Watermark Foto & Video Profesional",
     "loading": "Memuat...",
     "error": "Terjadi kesalahan",
     "retry": "Coba Lagi",
@@ -15,13 +16,20 @@
     "yes": "Ya",
     "no": "Tidak",
     "or": "atau",
-    "and": "dan"
+    "and": "dan",
+    "freeBadge": "100% Gratis & Privat",
+    "openStudio": "Buka Studio",
+    "reset": "Reset",
+    "download": "Unduh",
+    "downloadAll": "Unduh Semua (Batch)",
+    "clearAll": "Kosongkan Antrean"
   },
   "nav": {
     "home": "Beranda",
-    "about": "Tentang",
-    "contact": "Kontak",
-    "menu": "Menu",
+    "studio": "Studio",
+    "features": "Fitur",
+    "presets": "Preset",
+    "faq": "FAQ",
     "language": "Bahasa"
   },
   "theme": {
@@ -31,48 +39,225 @@
     "system": "Sistem"
   },
   "home": {
-    "title": "Selamat Datang",
-    "subtitle": "Untuk memulai, edit file page.tsx.",
-    "description": "Mencari titik awal atau instruksi lebih lanjut? Kunjungi",
+    "title": "MarkIt Studio",
+    "subtitle": "Watermark Foto & Video Profesional",
+    "description": "Beri watermark teks, logo, atau bingkai instan di browser.",
     "templates": "Template",
     "learning": "Pusat Belajar",
-    "deployNow": "Deploy Sekarang",
+    "deployNow": "Mulai Sekarang",
     "documentation": "Dokumentasi"
   },
   "metadata": {
-    "title": "Amir App",
-    "description": "Amir App — Aplikasi Web Progressive"
-  },
-  "error": {
-    "notFound": "Halaman tidak ditemukan",
-    "notFoundDescription": "Maaf, halaman yang Anda cari tidak ada.",
-    "serverError": "Kesalahan Server",
-    "serverErrorDescription": "Terjadi kesalahan pada server. Silakan coba lagi nanti.",
-    "goHome": "Kembali ke Beranda"
-  },
-  "footer": {
-    "copyright": "© {year} Amir App. Semua hak dilindungi.",
-    "madeWith": "Dibuat dengan"
+    "title": "MarkIt — Tambahkan Watermark pada Foto & Video Secara Instan",
+    "description": "Beri watermark teks, logo transparan, atau bingkai pada foto dan video secara instan dalam batch. 100% diproses di browser tanpa unggah ke server."
   },
   "demo": {
-    "title": "Enkripsi & Penyamaran ID",
-    "subtitle": "Keamanan tingkat tinggi & URL yang bersih untuk Next.js",
-    "intro": "Halaman ini menunjukkan implementasi dari dua teknik pengamanan ID yang telah diintegrasikan ke dalam template ini.",
-    "obfuscationTitle": "1. Penyamaran ID (Sqids)",
-    "obfuscationDesc": "Mengubah ID integer berurutan (misal dari database) menjadi string acak pendek dan ramah URL. Cocok untuk menyembunyikan ID agar tidak ditebak.",
-    "obfuscationPlaceholder": "Masukkan ID angka positif (misal: 12345)",
-    "obfuscateButton": "Samarkan ID",
-    "deobfuscateButton": "Kembalikan ID",
-    "encryptionTitle": "2. Enkripsi Kriptografis (AES-256-GCM)",
-    "encryptionDesc": "Enkripsi tingkat tinggi yang aman, terautentikasi (AES-GCM), dan anti-manipulasi. Hanya berjalan di sisi server (Server Component / Action).",
-    "encryptionPlaceholder": "Masukkan teks atau UUID sensitif",
-    "encryptButton": "Enkripsi Teks",
-    "decryptButton": "Dekripsi Teks",
-    "result": "Hasil",
-    "original": "Asli",
-    "processed": "Hasil Proses",
-    "errorInvalidNumber": "Silakan masukkan angka positif yang valid.",
-    "errorEmptyText": "Teks tidak boleh kosong.",
-    "success": "Sukses!"
+    "title": "MarkIt Demo",
+    "subtitle": "Pratinjau Studio",
+    "intro": "Demonstrasi fitur watermark",
+    "result": "Hasil"
+  },
+  "studio": {
+    "title": "MarkIt Studio Editor",
+    "subtitle": "Kustomisasi watermark foto dan video dengan kontrol real-time.",
+    "dropzone": {
+      "title": "Tarik & Lepas File di Sini",
+      "subtitle": "Mendukung multi-file Gambar (PNG, JPG, WebP) dan Video (MP4, WebM)",
+      "browse": "Pilih dari Perangkat",
+      "hint": "Semua file diproses 100% di browser Anda. Privasi terjamin aman tanpa kirim ke cloud."
+    },
+    "batch": {
+      "title": "Antrean File",
+      "empty": "Belum ada file diunggah",
+      "filesCount": "{count} File Siap",
+      "active": "Aktif",
+      "itemStatusReady": "Siap",
+      "itemStatusProcessing": "Merender...",
+      "itemStatusDone": "Selesai"
+    },
+    "canvas": {
+      "previewTitle": "Pratinjau Langsung",
+      "zoomIn": "Perbesar",
+      "zoomOut": "Perkecil",
+      "fit": "Pas Layar",
+      "playVideo": "Putar Video",
+      "pauseVideo": "Jeda",
+      "time": "Waktu",
+      "noMediaSelected": "Pilih atau unggah file untuk melihat pratinjau"
+    },
+    "tabs": {
+      "text": "Teks",
+      "logo": "Logo",
+      "frame": "Bingkai",
+      "presets": "Preset"
+    },
+    "text": {
+      "enable": "Aktifkan Watermark Teks",
+      "content": "Isi Teks",
+      "placeholder": "Contoh: © 2026 Studio Anda",
+      "font": "Jenis Huruf",
+      "fontSize": "Ukuran Huruf",
+      "opacity": "Transparansi (Opasitas)",
+      "rotation": "Sudut Rotasi",
+      "color": "Warna Teks",
+      "shadow": "Bayangan Halus",
+      "stroke": "Garis Tepi (Stroke)",
+      "tile": "Pola Berulang (Tile / Diagonal Grid)",
+      "tileSpacing": "Jarak Pola Ubin"
+    },
+    "logo": {
+      "enable": "Aktifkan Watermark Logo",
+      "uploadBtn": "Pilih File Logo (PNG / SVG)",
+      "changeBtn": "Ganti Logo",
+      "removeBtn": "Hapus Logo",
+      "size": "Ukuran Logo (%)",
+      "opacity": "Transparansi Logo",
+      "rotation": "Rotasi Logo",
+      "tile": "Pola Berulang Logo",
+      "noLogo": "Belum ada logo yang dipilih"
+    },
+    "frame": {
+      "enable": "Aktifkan Bingkai / Border",
+      "style": "Gaya Bingkai",
+      "styleSolid": "Garis Penuh Minimal",
+      "styleDouble": "Garis Ganda Elegan",
+      "styleDashed": "Garis Putus-putus",
+      "styleCard": "Polaroid / Kartu Foto",
+      "styleBanner": "Banner Bawah Metadata",
+      "borderWidth": "Ketebalan Bingkai",
+      "borderColor": "Warna Bingkai",
+      "padding": "Jarak Dari Tepi (Padding)",
+      "metaText": "Teks Metadata Banner",
+      "metaPlaceholder": "Shot on MarkIt • 50mm f/1.8"
+    },
+    "position": {
+      "title": "Posisi Watermark",
+      "quickAlign": "Posisi Cepat (9 Titik)",
+      "topLeft": "Kiri Atas",
+      "topCenter": "Tengah Atas",
+      "topRight": "Kanan Atas",
+      "middleLeft": "Tengah Kiri",
+      "center": "Tepat di Tengah",
+      "middleRight": "Tengah Kanan",
+      "bottomLeft": "Kiri Bawah",
+      "bottomCenter": "Tengah Bawah",
+      "bottomRight": "Kanan Bawah",
+      "customOffset": "Geser Presisi (Offset)",
+      "offsetX": "Offset Horisontal (X)",
+      "offsetY": "Offset Vertikal (Y)"
+    },
+    "presets": {
+      "title": "Pilihan Preset Instan",
+      "subtitle": "Terapkan konfigurasi siap pakai dengan satu kali klik.",
+      "apply": "Gunakan Preset"
+    },
+    "export": {
+      "format": "Format Ekspor",
+      "quality": "Kualitas",
+      "downloadActive": "Unduh File Ini",
+      "downloadAll": "Unduh Semua Hasil",
+      "preparing": "Sedang Merender...",
+      "success": "Berhasil diunduh!"
+    }
+  },
+  "landing": {
+    "hero": {
+      "badge": "⚡ 100% Client-Side • Tanpa Batas Kuota Cloud",
+      "title": "Watermark Foto & Video",
+      "highlight": "Cepat, Aman & Privat",
+      "subtitle": "Lindungi karya kreatif, portofolio, dan aset video Anda dari pencurian konten. Tambahkan tanda tangan teks, logo transparan, atau bingkai artistik dalam hitungan detik langsung di browser.",
+      "ctaStudio": "Mulai Beri Watermark Sekarang",
+      "ctaPresets": "Jelajahi Preset Populer",
+      "featureList": ["Mendukung Batch Upload", "Tanpa Sign Up", "Privasi Total", "Hasil Resolusi Asli"]
+    },
+    "features": {
+      "title": "Kenapa Kreator Memilih MarkIt?",
+      "subtitle": "Kombinasi kecepatan studio profesional dengan kemudahan aplikasi web modern.",
+      "items": [
+        {
+          "icon": "shield",
+          "title": "100% Privat & Aman",
+          "desc": "File Anda tidak pernah dikirim ke server kami. Seluruh proses decoding, perenderan canvas, dan enkoding berlangsung lokal di memori browser Anda."
+        },
+        {
+          "icon": "bolt",
+          "title": "Batch Processing Cepat",
+          "desc": "Terapkan satu pengaturan watermark ke puluhan foto sekaligus. Hemat waktu berjam-jam tanpa perlu membuka software pengeditan yang berat."
+        },
+        {
+          "icon": "film",
+          "title": "Mendukung Foto & Video",
+          "desc": "Tidak hanya gambar; beri watermark pada klip MP4 dan WebM dengan pratinjau scrubber interaktif untuk mengecek watermark di setiap detik."
+        },
+        {
+          "icon": "layers",
+          "title": "Kustomisasi 3-in-1",
+          "desc": "Gabungkan teks kustom, logo beresolusi tinggi, dan bingkai estetik dalam satu komposisi berlapis yang rapi."
+        },
+        {
+          "icon": "grid",
+          "title": "Pola Ubin Anti-Hapus (Tile)",
+          "desc": "Cegah cropping dan pembersihan AI dengan pola ubin berulang diagonal yang menutupi seluruh permukaan gambar secara merata."
+        },
+        {
+          "icon": "sparkles",
+          "title": "Preset Cerdas 1-Klik",
+          "desc": "Gunakan gaya watermark yang terbukti elegan dari fotografer profesional tanpa perlu mengatur koordinat dari nol."
+        }
+      ]
+    },
+    "howItWorks": {
+      "title": "Cara Kerja Sangat Sederhana",
+      "subtitle": "Tiga langkah cepat untuk melindungi karya visual Anda.",
+      "step1": {
+        "title": "1. Unggah Media",
+        "desc": "Tarik foto atau video ke area upload. Anda dapat menambahkan banyak file sekaligus."
+      },
+      "step2": {
+        "title": "2. Sesuaikan Watermark",
+        "desc": "Pilih teks, unggah logo brand, atau pilih preset yang pas. Atur opasitas dan posisi secara langsung."
+      },
+      "step3": {
+        "title": "3. Unduh Hasil",
+        "desc": "Klik unduh untuk menyimpan hasil beresolusi tinggi ke perangkat Anda secara instan."
+      }
+    },
+    "faq": {
+      "title": "Pertanyaan yang Sering Diajukan",
+      "subtitle": "Informasi teknis dan panduan penggunaan MarkIt Studio.",
+      "items": [
+        {
+          "q": "Apakah foto atau video saya diunggah ke internet?",
+          "a": "Sama sekali tidak! MarkIt bekerja sepenuhnya secara client-side menggunakan teknologi HTML5 Canvas dan Web APIs modern. File Anda tidak pernah meninggalkan komputer atau smartphone Anda."
+        },
+        {
+          "q": "Berapa banyak foto yang bisa saya watermark sekaligus?",
+          "a": "Anda dapat memproses puluhan file dalam sekali sesi antrean batch. Batasannya hanya bergantung pada kapasitas memori RAM perangkat Anda."
+        },
+        {
+          "q": "Format file apa saja yang didukung?",
+          "a": "Untuk gambar: JPEG, PNG, WebP, dan SVG. Untuk video: MP4 dan WebM yang didukung secara native oleh browser."
+        },
+        {
+          "q": "Apakah resolusi asli gambar akan berkurang?",
+          "a": "Tidak. Watermark dirender sesuai dimensi asli gambar piksel demi piksel, sehingga ketajaman foto tetap terjaga secara maksimal."
+        },
+        {
+          "q": "Apakah MarkIt bisa digunakan di ponsel (smartphone)?",
+          "a": "Tentu saja! Antarmuka MarkIt didesain mobile-first responsif dan juga berfungsi sebagai Progressive Web App (PWA) yang dapat Anda instal di homescreen."
+        }
+      ]
+    }
+  },
+  "footer": {
+    "desc": "MarkIt Studio — Platform watermarking foto dan video modern, cepat, dan 100% privat langsung dari browser Anda.",
+    "links": {
+      "product": "Produk",
+      "features": "Fitur",
+      "presets": "Preset Desain",
+      "faq": "Pertanyaan Umum",
+      "privacy": "Privasi & Keamanan"
+    },
+    "copyright": "© {year} MarkIt Studio. Hak Cipta Dilindungi Undang-Undang."
   }
 }

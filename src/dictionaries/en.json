@@ -1,6 +1,7 @@
 {
   "common": {
-    "appName": "Amir App",
+    "appName": "MarkIt Studio",
+    "appTagline": "Professional Photo & Video Watermarking Tool",
     "loading": "Loading...",
     "error": "An error occurred",
     "retry": "Retry",
@@ -15,13 +16,20 @@
     "yes": "Yes",
     "no": "No",
     "or": "or",
-    "and": "and"
+    "and": "and",
+    "freeBadge": "100% Free & Private",
+    "openStudio": "Open Studio",
+    "reset": "Reset",
+    "download": "Download",
+    "downloadAll": "Download All (Batch)",
+    "clearAll": "Clear Queue"
   },
   "nav": {
     "home": "Home",
-    "about": "About",
-    "contact": "Contact",
-    "menu": "Menu",
+    "studio": "Studio",
+    "features": "Features",
+    "presets": "Presets",
+    "faq": "FAQ",
     "language": "Language"
   },
   "theme": {
@@ -31,48 +39,225 @@
     "system": "System"
   },
   "home": {
-    "title": "Welcome",
-    "subtitle": "To get started, edit the page.tsx file.",
-    "description": "Looking for a starting point or more instructions? Head over to",
+    "title": "MarkIt Studio",
+    "subtitle": "Professional Photo & Video Watermark",
+    "description": "Add text, logo, or frame watermarks instantly in your browser.",
     "templates": "Templates",
     "learning": "Learning Center",
     "deployNow": "Deploy Now",
     "documentation": "Documentation"
   },
   "metadata": {
-    "title": "Amir App",
-    "description": "Amir App — Progressive Web Application"
-  },
-  "error": {
-    "notFound": "Page not found",
-    "notFoundDescription": "Sorry, the page you are looking for does not exist.",
-    "serverError": "Server Error",
-    "serverErrorDescription": "A server error occurred. Please try again later.",
-    "goHome": "Go to Homepage"
-  },
-  "footer": {
-    "copyright": "© {year} Amir App. All rights reserved.",
-    "madeWith": "Made with"
+    "title": "MarkIt — Add Watermark to Photos & Videos Instantly",
+    "description": "Add custom text, transparent logos, or aesthetic frames to photos and videos instantly in batch. 100% processed client-side in your browser."
   },
   "demo": {
-    "title": "ID Encryption & Obfuscation",
-    "subtitle": "High security & clean URLs for Next.js",
-    "intro": "This page demonstrates the implementation of two ID security techniques that have been integrated into this template.",
-    "obfuscationTitle": "1. ID Obfuscation (Sqids)",
-    "obfuscationDesc": "Converts sequential database integer IDs into short, unique, and URL-friendly strings. Perfect for hiding IDs from being guessed.",
-    "obfuscationPlaceholder": "Enter positive number ID (e.g. 12345)",
-    "obfuscateButton": "Obfuscate ID",
-    "deobfuscateButton": "Deobfuscate ID",
-    "encryptionTitle": "2. Cryptographic Encryption (AES-256-GCM)",
-    "encryptionDesc": "High-security, authenticated, and tamper-proof AES-GCM encryption. Runs exclusively on the server (Server Component / Action).",
-    "encryptionPlaceholder": "Enter sensitive text or UUID",
-    "encryptButton": "Encrypt Text",
-    "decryptButton": "Decrypt Text",
-    "result": "Result",
-    "original": "Original",
-    "processed": "Processed",
-    "errorInvalidNumber": "Please enter a valid positive number.",
-    "errorEmptyText": "Text cannot be empty.",
-    "success": "Success!"
+    "title": "MarkIt Demo",
+    "subtitle": "Studio Preview",
+    "intro": "Demonstration of watermarking capabilities",
+    "result": "Result"
+  },
+  "studio": {
+    "title": "MarkIt Studio Editor",
+    "subtitle": "Customize photo and video watermarks with live real-time controls.",
+    "dropzone": {
+      "title": "Drag & Drop Files Here",
+      "subtitle": "Supports multi-file Images (PNG, JPG, WebP) and Videos (MP4, WebM)",
+      "browse": "Browse Files",
+      "hint": "All files are processed 100% in your browser. Complete privacy without cloud uploads."
+    },
+    "batch": {
+      "title": "Media Queue",
+      "empty": "No media uploaded yet",
+      "filesCount": "{count} Files Ready",
+      "active": "Active",
+      "itemStatusReady": "Ready",
+      "itemStatusProcessing": "Rendering...",
+      "itemStatusDone": "Done"
+    },
+    "canvas": {
+      "previewTitle": "Live Preview",
+      "zoomIn": "Zoom In",
+      "zoomOut": "Zoom Out",
+      "fit": "Fit Screen",
+      "playVideo": "Play Video",
+      "pauseVideo": "Pause",
+      "time": "Time",
+      "noMediaSelected": "Select or upload media to preview"
+    },
+    "tabs": {
+      "text": "Text",
+      "logo": "Logo",
+      "frame": "Frame",
+      "presets": "Presets"
+    },
+    "text": {
+      "enable": "Enable Text Watermark",
+      "content": "Text Content",
+      "placeholder": "e.g. © 2026 Your Studio",
+      "font": "Font Family",
+      "fontSize": "Font Size",
+      "opacity": "Opacity",
+      "rotation": "Rotation Angle",
+      "color": "Text Color",
+      "shadow": "Drop Shadow",
+      "stroke": "Outline Stroke",
+      "tile": "Repeated Pattern (Diagonal Tile Grid)",
+      "tileSpacing": "Tile Grid Spacing"
+    },
+    "logo": {
+      "enable": "Enable Logo Watermark",
+      "uploadBtn": "Choose Logo File (PNG / SVG)",
+      "changeBtn": "Change Logo",
+      "removeBtn": "Remove Logo",
+      "size": "Logo Scale (%)",
+      "opacity": "Logo Opacity",
+      "rotation": "Logo Rotation",
+      "tile": "Tile Repeat Logo",
+      "noLogo": "No logo file chosen yet"
+    },
+    "frame": {
+      "enable": "Enable Frame / Border",
+      "style": "Frame Style",
+      "styleSolid": "Minimal Solid Line",
+      "styleDouble": "Double Border",
+      "styleDashed": "Dashed Line",
+      "styleCard": "Polaroid Photo Card",
+      "styleBanner": "Bottom Metadata Banner",
+      "borderWidth": "Border Thickness",
+      "borderColor": "Border Color",
+      "padding": "Inset Padding",
+      "metaText": "Banner Metadata Text",
+      "metaPlaceholder": "Shot on MarkIt • 50mm f/1.8"
+    },
+    "position": {
+      "title": "Watermark Alignment",
+      "quickAlign": "Quick Align (9-Grid)",
+      "topLeft": "Top Left",
+      "topCenter": "Top Center",
+      "topRight": "Top Right",
+      "middleLeft": "Middle Left",
+      "center": "Center",
+      "middleRight": "Middle Right",
+      "bottomLeft": "Bottom Left",
+      "bottomCenter": "Bottom Center",
+      "bottomRight": "Bottom Right",
+      "customOffset": "Fine-tune Position (Offset)",
+      "offsetX": "Horizontal Offset (X)",
+      "offsetY": "Vertical Offset (Y)"
+    },
+    "presets": {
+      "title": "Instant Preset Templates",
+      "subtitle": "Apply curated watermark styles with a single click.",
+      "apply": "Apply Preset"
+    },
+    "export": {
+      "format": "Export Format",
+      "quality": "Quality",
+      "downloadActive": "Download Active File",
+      "downloadAll": "Download All Media",
+      "preparing": "Rendering output...",
+      "success": "Downloaded successfully!"
+    }
+  },
+  "landing": {
+    "hero": {
+      "badge": "⚡ 100% Client-Side • No Cloud Uploads Needed",
+      "title": "Watermark Photos & Videos",
+      "highlight": "Fast, Secure & Private",
+      "subtitle": "Protect your creative photography, design portfolio, and video assets from unauthorized scraping. Add text signatures, brand logos, or minimal frames in seconds right inside your browser.",
+      "ctaStudio": "Launch Watermark Studio",
+      "ctaPresets": "Explore Curated Presets",
+      "featureList": ["Batch Upload Support", "No Sign Up Required", "100% Client-Side Privacy", "Full Original Resolution"]
+    },
+    "features": {
+      "title": "Why Creators Rely on MarkIt",
+      "subtitle": "Desktop-grade studio performance packed inside a sleek, modern web app.",
+      "items": [
+        {
+          "icon": "shield",
+          "title": "100% Private & Local",
+          "desc": "Your media never leaves your device. All decoding, canvas compositing, and rendering happens entirely within your browser memory."
+        },
+        {
+          "icon": "bolt",
+          "title": "High-Speed Batch Processing",
+          "desc": "Apply your watermark configuration across dozens of photos simultaneously. Save hours of manual exporting in heavy software."
+        },
+        {
+          "icon": "film",
+          "title": "Photo & Video Support",
+          "desc": "Watermark MP4 and WebM videos with an interactive playback scrubber to inspect your overlay across every second of footage."
+        },
+        {
+          "icon": "layers",
+          "title": "Multi-Layer Compositing",
+          "desc": "Combine styled text, high-resolution logos, and elegant picture borders into one unified, harmonious composition."
+        },
+        {
+          "icon": "grid",
+          "title": "Anti-Crop Tiled Pattern",
+          "desc": "Prevent cropping or AI content removal with diagonal repeating watermark grids covering the entire canvas surface."
+        },
+        {
+          "icon": "sparkles",
+          "title": "1-Click Studio Presets",
+          "desc": "Apply vetted layout styles used by professional photographers and design agencies without guessing coordinates."
+        }
+      ]
+    },
+    "howItWorks": {
+      "title": "How It Works in 3 Simple Steps",
+      "subtitle": "Effortless protection for your digital visual media.",
+      "step1": {
+        "title": "1. Upload Your Media",
+        "desc": "Drag and drop single or multiple photos and videos onto the studio workspace."
+      },
+      "step2": {
+        "title": "2. Fine-tune Watermark",
+        "desc": "Type text, upload your logo, or select a preset. Tweak opacity, scale, and placement in real-time."
+      },
+      "step3": {
+        "title": "3. Export & Download",
+        "desc": "Hit download to export crisp, full-resolution files directly to your device storage."
+      }
+    },
+    "faq": {
+      "title": "Frequently Asked Questions",
+      "subtitle": "Everything you need to know about MarkIt Studio.",
+      "items": [
+        {
+          "q": "Are my photos or videos uploaded to any server?",
+          "a": "Never! MarkIt operates entirely on client-side Web APIs and HTML5 Canvas. Your files remain exclusively on your computer or mobile device."
+        },
+        {
+          "q": "How many files can I process in a batch?",
+          "a": "You can process multiple files in a single queue. Processing capacity depends solely on your local device RAM."
+        },
+        {
+          "q": "Which file formats are supported?",
+          "a": "Images: JPEG, PNG, WebP, and SVG. Videos: MP4 and WebM files natively decodable by your browser."
+        },
+        {
+          "q": "Will image resolution be downgraded?",
+          "a": "No. The watermark is composited at the original pixel resolution of each source image."
+        },
+        {
+          "q": "Does MarkIt work smoothly on mobile phones?",
+          "a": "Yes! The interface is fully responsive, touch-friendly, and installable as a Progressive Web App (PWA)."
+        }
+      ]
+    }
+  },
+  "footer": {
+    "desc": "MarkIt Studio — Modern, lightning-fast, and 100% private photo and video watermarking directly inside your web browser.",
+    "links": {
+      "product": "Product",
+      "features": "Features",
+      "presets": "Presets",
+      "faq": "FAQ",
+      "privacy": "Privacy & Security"
+    },
+    "copyright": "© {year} MarkIt Studio. All rights reserved."
   }
 }

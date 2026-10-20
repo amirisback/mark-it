@@ -2,13 +2,13 @@ import type { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Amir App',
-    short_name: 'AmirApp',
-    description: 'Amir App Progressive Web App',
+    name: 'MarkIt Studio — Photo & Video Watermark',
+    short_name: 'MarkIt',
+    description: 'Beri watermark teks, logo transparan, atau bingkai pada foto dan video secara instan dalam batch.',
     start_url: '/',
     display: 'standalone',
-    background_color: '#ffffff',
-    theme_color: '#000000',
+    background_color: '#f8fafc',
+    theme_color: '#4f46e5',
     icons: [
       {
         src: '/icon-192x192.svg',

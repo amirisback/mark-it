@@ -1,202 +1,234 @@
-# 🚀 Init Next.js App — Amir App
+# MarkIt Studio: Studio Watermark Foto dan Video Client-Side
 
-Selamat datang di **Amir App**, template Next.js 16 modern berbasis **React 19**, **Tailwind CSS v4.3**, dan **TypeScript 6 (Strict Mode)** dengan dukungan Progressive Web App (PWA) serta integrasi i18n native berbasis cookie tanpa URL prefix.
+MarkIt Studio adalah aplikasi web dan Progressive Web App (PWA) modern untuk membubuhkan watermark pada foto dan video langsung di browser. Pemrosesan media berjalan 100% di sisi klien (client-side) menggunakan HTML5 Canvas 2D, Web Audio API, dan MediaRecorder API tanpa mengunggah berkas ke server atau cloud pihak ketiga.
 
-Repositori ini dioptimalkan secara mendalam menggunakan **Bun** sebagai pengelola paket, konfigurasi **ESLint v9**, serta dilengkapi dengan **ID Security Suite** bawaan untuk pengamanan identitas data Anda.
+Proyek ini dibangun di atas **Next.js 16 (App Router)**, **React 19**, **Tailwind CSS v4**, dan **TypeScript 6 (Strict Mode)** dengan pengelola paket **Bun**.
 
 ---
 
-## 📊 Arsitektur Pengamanan ID (ID Security Suite)
+## Arsitektur Pemrosesan Media (Client-Side Pipeline)
 
-Berikut adalah visualisasi alur pemrosesan data pada dua fitur keamanan utama (Sqids & AES-256-GCM) yang terintegrasi di dalam template ini:
+Diagram berikut mengilustrasikan alur kerja pemrosesan media di memori browser pengguna:
 
 ```mermaid
-graph TD
-    Input[("Input ID / Teks")] --> Decision{"Pilih Metode Keamanan"}
+flowchart TD
+    A["Input Media (Foto / Video)"] --> B["Batch Tray & Media Loader"]
+    B --> C{"Jenis Media"}
     
-    %% Obfuscation Path (Sqids)
-    Decision -- "Penyamaran ID (Sqids)" --> SqidsBlock["lib/obfuscator.ts (Sqids)"]
-    SqidsBlock --> |"Encode (Positive Integer)"| ObfHash["Obfuscated Hash (misal: o7vL39)"]
-    ObfHash --> |"Deobfuscate"| SqidsBlock
+    %% Cabang Gambar
+    C -->|"Gambar (PNG/JPG/WebP/SVG)"| D["HTML5 Canvas 2D Engine"]
     
-    %% Encryption Path (AES)
-    Decision -- "Enkripsi Kriptografis (AES-256-GCM)" --> ServerAction["app/demo-encryption/actions.ts (use server)"]
-    ServerAction --> |"Membaca ENCRYPTION_KEY"| AESGCM["lib/crypto.ts (AES-256-GCM)"]
-    AESGCM --> |"Encrypt & Sign"| EncToken["Base64 URL-Safe Encrypted Token"]
-    EncToken --> |"Decrypt & Verify"| AESGCM
+    %% Cabang Video
+    C -->|"Video (MP4/WebM)"| E["Video Element + AudioContext"]
+    E -->|"Ekstraksi Audio Track"| F["MediaStreamDestination"]
+    E -->|"Render Frame demi Frame"| D
     
-    %% UI Presentation
-    ObfHash --> UI["Demo Interface / URL SearchParams"]
-    EncToken --> UI
+    %% Lapisan Watermark
+    subgraph WatermarkLayers ["Konfigurasi Watermark Berlapis"]
+        W1["Teks: Font, Sizing Linear, Warna, Shadow, Stroke, Tile"]
+        W2["Logo: PNG/SVG Transparan, Skala, Opasitas, Tile"]
+        W3["Bingkai: Solid, Double, Dashed, Card, Banner Metadata"]
+        W4["Posisi: 9-Point Grid + Custom X/Y Offset"]
+    end
     
-    style Decision fill:#1a1a1a,stroke:#333,stroke-width:2px,color:#fff
-    style SqidsBlock fill:#312e81,stroke:#4338ca,color:#fff
-    style AESGCM fill:#064e3b,stroke:#047857,color:#fff
-    style ServerAction fill:#0f172a,stroke:#1e293b,color:#fff
+    WatermarkLayers --> D
+    
+    %% Pratinjau & Ekspor
+    D --> G["Interactive Studio Canvas Viewer"]
+    
+    G -->|"Ekspor Gambar"| H["Blob / DataURL (PNG, JPEG, WebP)"]
+    G -->|"Capture Canvas Stream"| I["MediaRecorder (WebM / MP4)"]
+    F -->|"Gabungkan Audio"| I
+    I --> J["Ekspor Video Lengkap + Audio"]
+    
+    H --> K["Unduhan Berkas (Single / Batch Sequential)"]
+    J --> K
 ```
 
 ---
 
-## ✨ Fitur Utama
+## Fitur Utama
 
-1. **Next.js 16 (App Router)** & **React 19**: Memanfaatkan fitur rendering server terbaru (*Server Components by default*).
-2. **Tailwind CSS v4.3 & Theming**: Styling modern berbasis CSS variables (`@theme inline`) dilengkapi `ThemeSwitcher` (`next-themes`) untuk Dark 🌙, Light ☀️, dan System 💻 mode.
-3. **Serwist PWA v9.5**: Service worker luring (*offline-first*) yang tangguh untuk mendukung Progressive Web Application.
-4. **Cookie-Based Native i18n**: Sistem lokalisasi native berbasis cookie `NEXT_LOCALE` tanpa prefix URL `[lang]`, menjaga URL tetap bersih (`/`, `/demo-encryption`). Mendukung Bahasa Indonesia (default: `id`) dan Inggris (`en`).
-5. **ID Security Suite**:
-   * **Sqids Obfuscation**: Mengubah ID integer database (auto-increment) menjadi hash unik ramah URL untuk menyembunyikan detail sensitif database.
-   * **AES-256-GCM Cryptography**: Enkripsi dua arah terautentikasi (*tamper-proof*) berbasis server untuk menjaga privasi data sensitif seperti UUID atau string transaksi.
-6. **Continuous Integration (CI)**: Pipeline GitHub Actions otomatis untuk mendeteksi error linter dan memverifikasi build aplikasi pada setiap Pull Request ke cabang `master`.
+### 1. 100% Client-Side dan Menjaga Privasi
+Seluruh proses decoding media, perenderan layer watermark, dan encoding berkas berlangsung lokal di memori browser. Berkas foto dan video Anda tidak pernah dikirimkan ke server eksternal, sehingga data pribadi dan aset rahasia tetap aman.
+
+### 2. Dukungan Gambar, Video, dan Antrean Batch
+- **Format Gambar:** PNG, JPEG, WebP, dan SVG.
+- **Format Video:** MP4 dan WebM dengan pemutar video interaktif, seek timeline scrubber, pengaturan volume, dan penanda durasi (`mm:ss`).
+- **Batch Processing:** Unggah multi-berkas sekaligus melalui drag and drop, terapkan satu konfigurasi watermark ke seluruh antrean, dan pantau status per berkas (Siap, Merender, Selesai).
+
+### 3. Kustomisasi Watermark Berlapis
+- **Watermark Teks:**
+  - Pilihan 10 jenis huruf terkurasi dari Google Fonts dalam 5 kategori: Modern Sans (Inter, Roboto, Montserrat), Serif (Playfair Display, Merriweather), Display/Bold (Bebas Neue, Oswald), Script/Handwritten (Caveat, Dancing Script), dan Monospace (JetBrains Mono, Geist Mono).
+  - Validasi pemuatan huruf via `document.fonts.load()` untuk mencegah fallback kanvas yang tidak terduga.
+  - Sistem ukuran persentase linear (0.5% hingga 30.0%) terhadap dimensi minimum media, dilengkapi 5 preset instan (Kecil 2%, Sedang 4.5%, Besar 8%, Ekstra 12%, Jumbo 18%).
+  - Warna, transparansi (opasitas), rotasi (-180° hingga 180°), bayangan halus (shadow), dan garis tepi (stroke).
+  - Mode ubin diagonal (tile repeating grid) dengan jarak ubin yang dapat disesuaikan untuk melindungi konten dari pemotongan (cropping) atau penghapusan berbasis AI.
+- **Watermark Logo:** Unggah logo transparan (PNG/SVG), kendalikan ukuran skala (%), opasitas, rotasi, dan pola ubin logo.
+- **Bingkai dan Border:** Gaya garis solid minimalis, garis ganda, garis putus-putus, kartu foto/polaroid, serta banner metadata fotografi bawah ("Shot on MarkIt").
+
+### 4. Penyelarasan Posisi Presisi
+- Tombol cepat 9 titik kisi (Top-Left, Top-Center, Top-Right, Middle-Left, Center, Middle-Right, Bottom-Left, Bottom-Center, Bottom-Right).
+- Slider offset manual sumbu horizontal (X) dan vertikal (Y) dalam persentase.
+
+### 5. Engine Ekspor Video dan Gambar
+- **Ekspor Gambar:** Format PNG, JPEG, dan WebP dengan pengaturan kompresi kualitas.
+- **Ekspor Video:** Render video penuh dengan `MediaRecorder` (WebM VP9/VP8 atau MP4 AVC1) yang mempertahankan trek audio asli menggunakan Web Audio API. Dilengkapi indikator progres persentase real-time dan tombol pembatalan render (AbortSignal).
+- **Unduh Sekaligus:** Unduh berkas yang sedang aktif atau unduh seluruh antrean batch secara berurutan.
+
+### 6. PWA dan Desain Responsif
+- **Progressive Web App (PWA):** Dikonfigurasi dengan Serwist Service Worker untuk performa offline-first dan dapat diinstal langsung di layar beranda ponsel maupun desktop.
+- **Mobile-First Layout:** Tata letak responsif dengan kontrol studio yang nyaman digunakan pada berbagai ukuran layar.
+
+### 7. Internasionalisasi dan Tema
+- **i18n Native:** Lokalisasi berbasis cookie `NEXT_LOCALE` tanpa prefix segmen URL, mendukung Bahasa Indonesia (`id`, default) dan Bahasa Inggris (`en`).
+- **Dark Mode Ready:** Dukungan tema Terang, Gelap, dan Sistem berbasis token Tailwind CSS v4 dan `next-themes`.
+
+### 8. Keamanan Aplikasi dan Proxy Middleware
+- Gerbang keamanan `src/proxy.ts` yang memblokir pemindaian kerentanan otomatis (vulnerability scanners) dan upaya path traversal (HTTP 403).
+- Rate limiter adaptif berdasarkan tier endpoint (Standard, Moderate, Strict) dengan respon HTTP 429 dan header `Retry-After`.
+- Modul enkripsi server AES-256-GCM (`lib/crypto.ts`) dan penyamaran ID integer (`lib/obfuscator.ts`) untuk kebutuhan backend lanjutan.
 
 ---
 
-## 📁 Struktur Folder Utama
+## Struktur Folder Proyek
 
 ```
-Init-nextjs-app/
-├── .github/workflows/         # Pipeline CI GitHub Actions (Lint & Build)
-├── src/                       # 📂 Semua Source Code Utama
+mark-it/
+├── .github/workflows/         # Pipeline CI GitHub Actions (Lint, Test, Build)
+├── cli/                       # Helper perkakas baris perintah lokal (bun run cli)
+│   ├── commands/              # Modul perintah CLI
+│   └── index.ts               # Entrypoint parser argumen CLI
+├── e2e/                       # Pengujian End-to-End Vitest
+│   └── app.test.ts            # Skenario pengujian proxy, keamanan, metadata, PWA
+├── public/                    # Aset statis, ikon PWA, manifest
+├── src/                       # Seluruh kode sumber aplikasi
 │   ├── app/                   # Next.js App Router
-│   │   ├── _components/       # Komponen UI App-wide (ThemeSwitcher, LanguageSwitcher)
-│   │   ├── demo-encryption/   # Halaman & Komponen Demo Keamanan ID
-│   │   │   ├── actions.ts     # Server Actions (use server)
-│   │   │   ├── DemoClient.tsx # Komponen Interaktif Klien
-│   │   │   └── page.tsx       # Halaman utama demo (Server Component)
-│   │   ├── favicon.ico
-│   │   ├── globals.css        # Pengaturan CSS & Tema Tailwind v4
-│   │   ├── layout.tsx         # Root Layout (ThemeProvider, Metadata SEO)
-│   │   ├── manifest.ts        # Web App Manifest PWA
-│   │   ├── page.tsx           # Halaman Utama (Homepage i18n)
-│   │   ├── providers.tsx      # Provider Wrapper (next-themes ThemeProvider)
+│   │   ├── _components/       # Komponen tema dan pengalih bahasa
+│   │   ├── favicon.ico        # Ikon tab peramban
+│   │   ├── globals.css        # Desain token CSS & konfigurasi Tailwind v4
+│   │   ├── layout.tsx         # Root layout (Metadata SEO, ThemeProvider)
+│   │   ├── manifest.ts        # PWA Web App Manifest
+│   │   ├── page.tsx           # Halaman utama MarkIt Studio
+│   │   ├── providers.tsx      # Provider next-themes
 │   │   ├── robots.ts          # Generator robots.txt
 │   │   ├── sitemap.ts         # Generator sitemap.xml
-│   │   └── sw.ts              # Service Worker (Serwist)
-│   ├── dictionaries/          # Berkas Terjemahan Bahasa (JSON)
-│   │   ├── id.json            # Bahasa Indonesia (Default)
-│   │   └── en.json            # Bahasa Inggris
-│   ├── i18n/                  # Konfigurasi i18n
-│   │   └── config.ts          # Config locale & tipe Locale
-│   ├── lib/                   # Utilitas Pendukung Server & Client
-│   │   ├── crypto.ts          # Enkripsi & Dekripsi AES-256-GCM (Server-Only)
-│   │   ├── dictionaries.ts    # Dictionary loader (Server-Only)
-│   │   ├── i18n-actions.ts    # Server Action pengubah cookie NEXT_LOCALE
-│   │   ├── i18n-server.ts     # Helper retrieval locale & dictionary (Server-Only)
-│   │   ├── obfuscator.ts      # Penyamaran & Pemulihan ID (Sqids)
-│   │   └── seo.ts             # Utilitas JSON-LD & SEO Metadata
-│   └── proxy.ts               # Proxy middleware ringan
-├── public/                    # Aset statis & Ikon PWA
-├── prompt_ai/                 # Prompt AI & panduan instruksi
-├── .env                       # File variabel environment tunggal (.env saja)
-├── AGENTS.md                  # Aturan khusus AI Agent (Next.js & Skills)
-├── GUIDELINE.md               # 📌 Panduan arsitektur & standar coding proyek
+│   │   └── sw.ts              # Service Worker PWA (Serwist)
+│   ├── components/            # Komponen antarmuka modular
+│   │   ├── landing/           # Bagian halaman beranda (Hero, Fitur, Cara Kerja, Preset, FAQ)
+│   │   ├── layout/            # Header dan Footer aplikasi
+│   │   ├── studio/            # Komponen editor studio (Canvas, Inspector, Batch Tray, Export)
+│   │   └── ui/                # Komponen primitif UI (Button, Slider, Switch, Badge, ColorPicker)
+│   ├── data/                  # Data statis dan koleksi konfigurasi
+│   │   ├── fonts.ts           # Daftar 10 Google Fonts terkurasi & preset ukuran
+│   │   ├── navigation.ts      # Menu navigasi header dan footer
+│   │   └── presets.ts         # Template preset watermark 1-klik
+│   ├── dictionaries/          # Berkas terjemahan bahasa
+│   │   ├── en.json            # Terjemahan Bahasa Inggris
+│   │   └── id.json            # Terjemahan Bahasa Indonesia (default)
+│   ├── i18n/                  # Konfigurasi locale
+│   │   └── config.ts          # Definisi tipe dan daftar bahasa yang didukung
+│   ├── lib/                   # Utilitas logika dan engine
+│   │   ├── __tests__/         # Unit test untuk seluruh fungsi utilitas
+│   │   ├── crypto.ts          # Enkripsi & Dekripsi AES-256-GCM (server-only)
+│   │   ├── dictionaries.ts    # Loader terjemahan (server-only)
+│   │   ├── i18n-actions.ts    # Server action untuk pengubahan cookie bahasa
+│   │   ├── i18n-server.ts     # Pengambil locale di Server Components
+│   │   ├── obfuscator.ts      # Penyamaran ID integer Sqids
+│   │   ├── rate-limiter.ts    # Rate limiting berbasis in-memory window
+│   │   ├── security-guards.ts # Pendeteksi path traversal dan bot mencurigakan
+│   │   ├── seo.ts             # Metadata SEO dan generator JSON-LD
+│   │   └── watermark-engine.ts# Core engine rendering kanvas & ekspor video client-side
+│   ├── proxy.ts               # Handler middleware keamanan dan rate limit
+│   └── types/                 # Definisi tipe data TypeScript
+│       └── watermark.ts       # Interface media, watermark, dan status ekspor
+├── workflow/                  # Dokumentasi alur kerja tim (PRD, Desain, Build, QA, Signoff)
+├── .env                       # Berkas variabel lingkungan tunggal
+├── AGENTS.md                  # Panduan agen AI
+├── GUIDELINE.md               # Standar arsitektur dan konvensi kode
 ├── next.config.ts             # Konfigurasi Next.js
-├── tsconfig.json              # Konfigurasi TypeScript Strict
-├── eslint.config.mjs          # Konfigurasi ESLint v9
-└── package.json               # Dependensi & skrip proyek
+├── package.json               # Dependensi paket dan skrip npm
+├── postcss.config.mjs          # Konfigurasi PostCSS Tailwind v4
+└── tsconfig.json              # Konfigurasi TypeScript Strict
 ```
 
 ---
 
-## 🛠️ Panduan Pengembangan
+## Panduan Memulai
 
 ### Prasyarat
-Pastikan Anda telah memasang **Bun** (≥ 1.3) di sistem lokal Anda.
+Pastikan sistem Anda telah terpasang:
+- **Bun** (versi 1.2 atau lebih baru)
+- Peramban web modern yang mendukung HTML5 Canvas dan Web APIs (Chrome, Edge, Firefox, atau Safari versi terbaru)
 
 ### 1. Pemasangan Dependensi
-Pasang seluruh paket pustaka dengan cepat menggunakan Bun:
+Pasang seluruh paket pustaka:
 ```bash
 bun install
 ```
 
-### 2. Jalankan Mode Pengembangan
-Jalankan server lokal untuk melihat hasil perubahan secara langsung:
+### 2. Menjalankan Server Pengembangan
+Jalankan aplikasi di server lokal:
 ```bash
 bun run dev
 ```
-Buka [http://localhost:3000](http://localhost:3000) di peramban Anda.
+Buka alamat [http://localhost:3000](http://localhost:3000) pada peramban Anda.
 
-### 3. Pemeriksaan Linter (ESLint)
-Pastikan kode Anda bebas dari error linter sebelum melakukan komit:
+### 3. Menjalankan Pengujian (Testing)
+Jalankan pengujian unit (Unit Tests):
+```bash
+bun test
+```
+
+Jalankan pengujian end-to-end (E2E Tests):
+```bash
+bun test:e2e
+```
+
+### 4. Pemeriksaan Kode (Linting)
+Jalankan ESLint untuk memastikan kerapian kode dan ketiadaan error:
 ```bash
 bun run lint
 ```
 
-### 4. Build untuk Produksi
-Verifikasi kelayakan kompilasi proyek Next.js Anda:
+### 5. Kompilasi Produksi (Build)
+Uji kesiapan kompilasi bundel aplikasi Next.js:
 ```bash
 bun run build
 ```
 
----
-
-## 🌐 Panduan Penggunaan i18n (Internationalization)
-
-Pengaturan bahasa menggunakan cookie `NEXT_LOCALE` tanpa mengubah URL path.
-
-### Di Server Component:
-```typescript
-import { getCurrentDictionary } from "@/lib/i18n-server";
-
-export default async function Page() {
-  const { locale, dict } = await getCurrentDictionary();
-
-  return <h1>{dict.home.title}</h1>;
-}
+Jalankan server produksi lokal setelah kompilasi:
+```bash
+bun start
 ```
 
-### Di Client Component:
-Gunakan komponen `LanguageSwitcher` dari `@/app/_components/language-switcher`:
-```tsx
-import { LanguageSwitcher } from "@/app/_components/language-switcher";
-
-export function Header() {
-  return <LanguageSwitcher />;
-}
+### 6. Menjalankan CLI Helper
+Jalankan perkakas CLI bawaan proyek:
+```bash
+bun run cli --help
 ```
 
 ---
 
-## 🔒 Panduan Penggunaan ID Security Suite
+## Konfigurasi Lingkungan (.env)
 
-### 1. Penyamaran ID (Sqids)
-Cocok untuk mengubah angka ID database (seperti `10543`) menjadi hash string unik pendek seperti `o7vL39` untuk digunakan pada parameter URL tanpa menampilkan ID asli.
+Proyek ini menerapkan prinsip **satu berkas `.env` tunggal** untuk seluruh lingkungan kerja (tanpa `.env.local` atau `.env.production`).
 
-```typescript
-import { obfuscateId, deobfuscateId } from "@/lib/obfuscator";
-
-// Proses menyamarkan ID
-const hash = obfuscateId(10543);
-console.log(hash); // Output: "o7vL39" (panjang minimal 6 karakter)
-
-// Proses mengembalikan ke ID asli
-const originalId = deobfuscateId("o7vL39");
-console.log(originalId); // Output: 10543
-```
-
-### 2. Enkripsi Kriptografis (AES-256-GCM)
-Enkripsi terautentikasi super aman untuk mengenkripsi string sensitif secara bolak-balik menggunakan algoritma AES-256-GCM. Fitur ini dilindungi dengan pustaka `"server-only"` sehingga kunci rahasia (`ENCRYPTION_KEY`) tidak akan pernah bocor ke sisi klien peramban.
-
-```typescript
-// PENTING: Hanya dapat dipanggil di Server Components, Server Actions, atau API Routes
-import { encrypt, decrypt } from "@/lib/crypto";
-
-// Proses Enkripsi
-const token = encrypt("user-1234-uuid-secret");
-console.log(token); // Output: Base64 URL-Safe String terenkripsi
-
-// Proses Dekripsi
-const plainText = decrypt(token);
-console.log(plainText); // Output: "user-1234-uuid-secret"
-```
-
-*Catatan: Jika token terenkripsi mengalami manipulasi karakter oleh peretas, proses dekripsi akan secara otomatis mendeteksi kegagalan otentikasi data dan mengembalikan nilai `null` secara aman untuk mencegah serangan injeksi.*
+| Variabel | Keterangan | Akses |
+|---|---|---|
+| `NEXT_PUBLIC_APP_NAME` | Nama publik aplikasi ("MarkIt Studio") | Klien & Server |
+| `NEXT_PUBLIC_APP_VERSION` | Versi aplikasi | Klien & Server |
+| `NEXT_PUBLIC_APP_URL` | URL dasar aplikasi untuk SEO & canonical link | Klien & Server |
+| `NEXT_PUBLIC_ENABLE_PWA` | Mengaktifkan atau menonaktifkan fitur PWA | Klien & Server |
+| `NEXT_PUBLIC_DEFAULT_LOCALE` | Bahasa default aplikasi (`id`) | Klien & Server |
+| `ENCRYPTION_KEY` | Kunci rahasia 32 karakter (256-bit) untuk AES-GCM | Server Only |
+| `SQIDS_ALPHABET` | Deret karakter alfabet acak untuk penyamaran ID Sqids | Server Only |
 
 ---
 
-## 🚀 Konfigurasi Environment Variables
+## Standar Kode dan Kualitas
 
-Proyek ini menggunakan **1 berkas `.env` tunggal** tanpa berkas `.env` lainnya (`.env.local`, `.env.development`, `.env.production`, maupun `.env.example`). Seluruh konfigurasi aplikasi dan rahasia server disatukan di dalam `.env`. Rahasia kriptografi diatur **tanpa** awalan `NEXT_PUBLIC_` untuk memastikan keamanan penuh di sisi server.
-
-### Variabel Utama:
-* `ENCRYPTION_KEY`: Kunci rahasia berukuran **tepat 32 karakter** (256-bit) yang digunakan oleh modul AES-GCM.
-* `SQIDS_ALPHABET`: Deretan karakter kustom yang digunakan oleh Sqids untuk mengacak hash URL yang dihasilkan.
+- **Zero Suppression:** Dilarang menggunakan anotasi pengabaian tipe seperti `// @ts-ignore` atau `// eslint-disable`.
+- **TypeScript Strict:** Seluruh modul menggunakan strict mode tanpa penggunaan tipe `any` implisit.
+- **Client-Side Heavy, Zero Cloud Waste:** Fungsi watermarking tidak membebani server backend atau cloud compute, memastikan biaya operasional server tetap efisien.
+- **Verifikasi Kualitas:** Terverifikasi lulus 79 pengujian unit engine dan 14 pengujian E2E integrasi.

@@ -101,10 +101,12 @@ export function decrypt(encryptedText: string): string | null {
     return decrypted;
   } catch (error) {
     // Graceful error logging - standard for cryptographically failed inputs (e.g. tampering, expired, wrong key)
-    console.error(
-      "[Decryption Error (Possibly Tampered or Invalid Key)]:",
-      (error as Error).message
-    );
+    if (process.env.NODE_ENV !== "test") {
+      console.error(
+        "[Decryption Error (Possibly Tampered or Invalid Key)]:",
+        (error as Error).message
+      );
+    }
     return null;
   }
 }

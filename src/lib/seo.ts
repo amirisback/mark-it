@@ -8,7 +8,7 @@ import { i18n } from "@/i18n/config";
 // Base URL for the site — update in .env for production (trailing slashes stripped)
 const rawSiteUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 const SITE_URL = rawSiteUrl.replace(/\/+$/, "");
-const SITE_NAME = process.env.NEXT_PUBLIC_APP_NAME || "Amir App";
+const SITE_NAME = process.env.NEXT_PUBLIC_APP_NAME || "MarkIt Studio";
 
 export const seoConfig = {
   siteUrl: SITE_URL,
