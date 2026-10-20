@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { MAIN_NAV_ITEMS } from '@/data/navigation';
 import { Button } from '@/components/ui/button';
+import { ThemeSwitcher } from '@/app/_components/theme-switcher';
 
 export interface HeaderProps {
   appName?: string;
@@ -66,7 +67,10 @@ export function Header({ appName = 'MarkIt Studio' }: HeaderProps) {
 
         {/* Header Right Actions */}
         <div className="flex items-center gap-3">
-          {/* Note: LanguageSwitcher & ThemeSwitcher sengaja disiapkan namun default di-hide per GUIDELINE.md aturan 14 */}
+          {/* Desktop Theme Switcher */}
+          <div className="hidden sm:flex items-center">
+            <ThemeSwitcher variant="compact" />
+          </div>
 
           <a href="#studio">
             <Button variant="brand" size="sm" className="hidden sm:inline-flex">
@@ -122,25 +126,36 @@ export function Header({ appName = 'MarkIt Studio' }: HeaderProps) {
 
       {/* Mobile Drawer Menu */}
       {mobileMenuOpen ? (
-        <div className="md:hidden border-b border-border/60 bg-background/95 px-4 pt-3 pb-5 space-y-2">
-          {MAIN_NAV_ITEMS.map((item) => (
-            <a
-              key={item.id}
-              href={item.href}
-              onClick={() => setMobileMenuOpen(false)}
-              className="block px-3 py-2 rounded-md text-base font-medium text-foreground hover:bg-secondary"
-            >
-              {item.id === 'home'
-                ? 'Beranda'
-                : item.id === 'studio'
-                ? 'Studio Editor'
-                : item.id === 'features'
-                ? 'Keunggulan'
-                : item.id === 'presets'
-                ? 'Preset'
-                : 'FAQ'}
-            </a>
-          ))}
+        <div className="md:hidden border-b border-border/60 bg-background/95 px-4 pt-3 pb-5 space-y-3">
+          <div className="space-y-1">
+            {MAIN_NAV_ITEMS.map((item) => (
+              <a
+                key={item.id}
+                href={item.href}
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-3 py-2 rounded-md text-base font-medium text-foreground hover:bg-secondary"
+              >
+                {item.id === 'home'
+                  ? 'Beranda'
+                  : item.id === 'studio'
+                  ? 'Studio Editor'
+                  : item.id === 'features'
+                  ? 'Keunggulan'
+                  : item.id === 'presets'
+                  ? 'Preset'
+                  : 'FAQ'}
+              </a>
+            ))}
+          </div>
+
+          {/* Mobile Theme Switcher */}
+          <div className="pt-2 border-t border-border/50">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-2 block">
+              Pilih Tema Tampilan
+            </span>
+            <ThemeSwitcher variant="expanded" />
+          </div>
+
           <div className="pt-2">
             <a href="#studio" onClick={() => setMobileMenuOpen(false)}>
               <Button variant="brand" className="w-full justify-center">

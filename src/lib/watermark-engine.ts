@@ -3,11 +3,19 @@ import type {
   PositionConfig,
   GridPosition,
   ExportFormat,
+  VideoQualityPreset,
+  VideoQualityProfile,
+  VideoBitrateConfig,
 } from '@/types/watermark';
 
 /**
- * Memuat gambar secara asynchronous hingga benar-benar ter-decode
+ * Menerapkan kualitas smoothing tinggi pada konteks 2D Canvas
  */
+export function applyPristineCanvasSmoothing(ctx: CanvasRenderingContext2D): void {
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+}
+
 /**
  * Memuat gambar secara asynchronous hingga benar-benar ter-decode
  */
@@ -134,6 +142,9 @@ export function drawWatermarkOnCanvas(
 
   canvas.width = finalCanvasWidth;
   canvas.height = finalCanvasHeight;
+
+  // Terapkan kualitas smoothing tinggi segera setelah alokasi dimensi kanvas
+  applyPristineCanvasSmoothing(ctx);
 
   ctx.clearRect(0, 0, finalCanvasWidth, finalCanvasHeight);
 
@@ -399,6 +410,158 @@ export async function ensureFontLoadedAsync(fontFamily: string, testText = 'Mark
 }
 
 /**
+ * Menghitung bitrate video adaptif berdasarkan dimensi resolusi, framerate, dan preset kualitas
+ */
+export function computeAdaptiveVideoBitrate(
+  width: number,
+  height: number,
+  fps = 30,
+  preset: VideoQualityProfile = 'maximum'
+): number {
+  const pixels = width * height;
+  const normalizedPreset = preset === 'optimal' ? 'standard' : preset;
+
+  let baseBitrate: number;
+
+  if (pixels <= 1280 * 720) {
+    // 720p HD and below
+    switch (normalizedPreset) {
+      case 'standard':
+        baseBitrate = 8_000_000; // 8 Mbps
+        break;
+      case 'high':
+        baseBitrate = 12_000_000; // 12 Mbps
+        break;
+      case 'maximum':
+      default:
+        baseBitrate = 18_000_000; // 18 Mbps
+        break;
+    }
+  } else if (pixels <= 1920 * 1080) {
+    // 1080p FHD
+    switch (normalizedPreset) {
+      case 'standard':
+        baseBitrate = 12_000_000; // 12 Mbps
+        break;
+      case 'high':
+        baseBitrate = 16_000_000; // 16 Mbps
+        break;
+      case 'maximum':
+      default:
+        baseBitrate = 28_000_000; // 28 Mbps
+        break;
+    }
+  } else if (pixels <= 2560 * 1440) {
+    // 1440p 2K
+    switch (normalizedPreset) {
+      case 'standard':
+        baseBitrate = 18_000_000; // 18 Mbps
+        break;
+      case 'high':
+        baseBitrate = 24_000_000; // 24 Mbps
+        break;
+      case 'maximum':
+      default:
+        baseBitrate = 36_000_000; // 36 Mbps
+        break;
+    }
+  } else {
+    // 4K UHD and above
+    switch (normalizedPreset) {
+      case 'standard':
+        baseBitrate = 24_000_000; // 24 Mbps
+        break;
+      case 'high':
+        baseBitrate = 35_000_000; // 35 Mbps
+        break;
+      case 'maximum':
+      default:
+        baseBitrate = 45_000_000; // 45 Mbps
+        break;
+    }
+  }
+
+  // Penyesuaian frame rate jika > 30 FPS (misalnya 60 FPS)
+  if (fps > 30) {
+    const fpsScale = Math.min(1.5, Math.max(1, fps / 30));
+    baseBitrate = Math.round(baseBitrate * fpsScale);
+  }
+
+  // Batas maksimum kapabilitas browser: 50 Mbps
+  return Math.min(50_000_000, baseBitrate);
+}
+
+/**
+ * Menghitung konfigurasi bitrate video & audio adaptif (256kbps audio)
+ */
+export function calculateAdaptiveVideoBitrate(
+  width: number,
+  height: number,
+  fps?: number,
+  profile?: VideoQualityProfile
+): VideoBitrateConfig {
+  return {
+    videoBitsPerSecond: computeAdaptiveVideoBitrate(width, height, fps, profile),
+    audioBitsPerSecond: 256_000,
+  };
+}
+
+/**
+ * Opsi konfigurasi capture frame snapshot native video
+ */
+export interface VideoSnapshotOptions {
+  videoElement: HTMLVideoElement;
+  sourceWidth?: number;
+  sourceHeight?: number;
+  config: WatermarkFullConfig;
+  logoImg?: HTMLImageElement | null;
+  format?: ExportFormat;
+  quality?: number;
+}
+
+/**
+ * Menangkap snapshot native dari frame video aktif pada resolusi aslinya secara langsung
+ * tanpa terdistorsi oleh scaling viewport atau canvas viewer
+ */
+export async function captureNativeVideoFrameAsync(
+  videoElement: HTMLVideoElement,
+  config: WatermarkFullConfig,
+  logoImg?: HTMLImageElement | null,
+  format: ExportFormat = 'image/png',
+  quality = 0.95,
+  sourceWidth?: number,
+  sourceHeight?: number
+): Promise<Blob> {
+  const width = sourceWidth || videoElement.videoWidth || 1920;
+  const height = sourceHeight || videoElement.videoHeight || 1080;
+
+  if (config.text.enabled && config.text.fontFamily) {
+    await ensureFontLoadedAsync(config.text.fontFamily);
+  }
+
+  const offscreenCanvas = document.createElement('canvas');
+  drawWatermarkOnCanvas(offscreenCanvas, videoElement, width, height, config, logoImg);
+  return exportCanvasToBlob(offscreenCanvas, format, quality);
+}
+
+/**
+ * Wrapper snapshot native video sesuai kontrak PRD
+ */
+export function exportNativeVideoSnapshotAsync(options: VideoSnapshotOptions): Promise<Blob> {
+  return captureNativeVideoFrameAsync(
+    options.videoElement,
+    options.config,
+    options.logoImg,
+    options.format || 'image/png',
+    options.quality ?? 0.95,
+    options.sourceWidth,
+    options.sourceHeight
+  );
+}
+
+
+
+/**
  * Opsi konfigurasi ekspor video bermarkah
  */
 export interface VideoExportOptions {
@@ -410,6 +573,8 @@ export interface VideoExportOptions {
   logoImg?: HTMLImageElement | null;
   fps?: number;
   mimeType?: string;
+  qualityPreset?: VideoQualityPreset;
+  qualityProfile?: VideoQualityProfile;
   onProgress?: (progress: { percent: number; currentTime: number; totalTime: number }) => void;
   signal?: AbortSignal;
 }
@@ -427,6 +592,8 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
     logoImg,
     fps = 30,
     mimeType,
+    qualityPreset,
+    qualityProfile,
     onProgress,
     signal,
   } = options;
@@ -497,11 +664,23 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
     throw new Error('MediaRecorder tidak didukung di lingkungan peramban ini.');
   }
 
+  // Hitung bitrate adaptif berdasarkan resolusi dan kualitas preset
+  const chosenPreset: VideoQualityPreset =
+    qualityPreset ||
+    (qualityProfile === 'optimal' ? 'standard' : qualityProfile) ||
+    'maximum';
+  const bitrateConfig = calculateAdaptiveVideoBitrate(sourceWidth, sourceHeight, fps, chosenPreset);
+
   const chunks: BlobPart[] = [];
-  const recorder = new MediaRecorder(
-    recordingStream,
-    chosenMime ? { mimeType: chosenMime, videoBitsPerSecond: 8_000_000 } : undefined
-  );
+  const recorderOptions: MediaRecorderOptions = {
+    videoBitsPerSecond: bitrateConfig.videoBitsPerSecond,
+    audioBitsPerSecond: bitrateConfig.audioBitsPerSecond,
+  };
+  if (chosenMime) {
+    recorderOptions.mimeType = chosenMime;
+  }
+
+  const recorder = new MediaRecorder(recordingStream, recorderOptions);
 
   recorder.ondataavailable = (e) => {
     if (e.data && e.data.size > 0) {
@@ -533,13 +712,35 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
   };
 
   return new Promise<Blob>((resolve, reject) => {
+    const hasRVFC = typeof videoElement.requestVideoFrameCallback === 'function';
+
     let animFrameId: number | null = null;
+    let rvfcHandle: number | null = null;
     let isFinished = false;
+
+    const cancelScheduledFrame = () => {
+      if (animFrameId !== null) {
+        cancelAnimationFrame(animFrameId);
+        animFrameId = null;
+      }
+      if (rvfcHandle !== null && typeof videoElement.cancelVideoFrameCallback === 'function') {
+        videoElement.cancelVideoFrameCallback(rvfcHandle);
+        rvfcHandle = null;
+      }
+    };
+
+    const scheduleNextFrame = (cb: () => void) => {
+      if (hasRVFC && typeof videoElement.requestVideoFrameCallback === 'function') {
+        rvfcHandle = videoElement.requestVideoFrameCallback(() => cb());
+      } else {
+        animFrameId = requestAnimationFrame(() => cb());
+      }
+    };
 
     const handleAbort = () => {
       if (isFinished) return;
       isFinished = true;
-      if (animFrameId) cancelAnimationFrame(animFrameId);
+      cancelScheduledFrame();
       if (recorder.state !== 'inactive') {
         recorder.stop();
       }
@@ -596,7 +797,7 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
         return;
       }
 
-      // Loop rendering frame demi frame
+      // Loop rendering frame demi frame dengan requestVideoFrameCallback / requestAnimationFrame
       const renderLoop = () => {
         if (signal?.aborted) {
           handleAbort();
@@ -611,6 +812,7 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
 
         if (curTime >= totalDuration - 0.05 || videoElement.ended) {
           isFinished = true;
+          cancelScheduledFrame();
           videoElement.pause();
           onProgress?.({ percent: 100, currentTime: totalDuration, totalTime: totalDuration });
           if (recorder.state !== 'inactive') {
@@ -619,10 +821,10 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
           return;
         }
 
-        animFrameId = requestAnimationFrame(renderLoop);
+        scheduleNextFrame(renderLoop);
       };
 
-      animFrameId = requestAnimationFrame(renderLoop);
+      scheduleNextFrame(renderLoop);
     };
 
     // Robust seek guard: jika video sudah di frame 0, langsung mulai

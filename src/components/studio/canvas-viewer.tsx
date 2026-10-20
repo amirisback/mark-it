@@ -2,7 +2,11 @@
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import type { MediaItem, WatermarkFullConfig } from '@/types/watermark';
-import { drawWatermarkOnCanvas, loadImageAsync } from '@/lib/watermark-engine';
+import {
+  drawWatermarkOnCanvas,
+  loadImageAsync,
+  applyPristineCanvasSmoothing,
+} from '@/lib/watermark-engine';
 import { Button } from '@/components/ui/button';
 
 export interface CanvasViewerProps {
@@ -68,6 +72,7 @@ export function CanvasViewer({
           if (ctx) {
             canvas.width = img.width;
             canvas.height = img.height;
+            applyPristineCanvasSmoothing(ctx);
             ctx.drawImage(img, 0, 0);
           }
         } else {
@@ -95,6 +100,7 @@ export function CanvasViewer({
       if (ctx) {
         canvas.width = width;
         canvas.height = height;
+        applyPristineCanvasSmoothing(ctx);
         ctx.drawImage(video, 0, 0, width, height);
       }
     } else {

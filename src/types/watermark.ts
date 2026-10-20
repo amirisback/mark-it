@@ -106,11 +106,21 @@ export type VideoExportMode = 'full_video' | 'single_frame';
 export type VideoContainerFormat = 'video/webm' | 'video/mp4';
 export type ExportOutputFormat = ExportFormat | VideoContainerFormat;
 
+export type VideoQualityPreset = 'maximum' | 'high' | 'standard';
+export type VideoQualityProfile = VideoQualityPreset | 'optimal';
+
+export interface VideoBitrateConfig {
+  videoBitsPerSecond: number;
+  audioBitsPerSecond: number;
+}
+
 export interface ExportSettings {
   format: ExportFormat;
   videoFormat: VideoContainerFormat;
   videoMode: VideoExportMode;
   quality: number; // 0.1 to 1.0
+  videoQuality?: VideoQualityPreset;
+  videoQualityProfile?: VideoQualityPreset;
   customPrefix: string;
 }
 

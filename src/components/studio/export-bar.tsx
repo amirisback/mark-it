@@ -6,8 +6,10 @@ import type {
   ExportSettings,
   VideoExportMode,
   VideoContainerFormat,
+  VideoQualityPreset,
 } from '@/types/watermark';
 import { Button } from '@/components/ui/button';
+import { computeAdaptiveVideoBitrate } from '@/lib/watermark-engine';
 
 export interface VideoProgressInfo {
   percent: number;
@@ -24,11 +26,21 @@ export interface ExportBarProps {
   onDownloadAll: () => void;
   hasActiveItem: boolean;
   activeItemType?: 'image' | 'video';
+  sourceWidth?: number;
+  sourceHeight?: number;
   totalItems: number;
   isProcessing: boolean;
   progressText?: string;
   videoProgress?: VideoProgressInfo | null;
   onCancelExport?: () => void;
+}
+
+function getResolutionCategory(width: number, height: number): string {
+  const pixels = width * height;
+  if (pixels <= 1280 * 720) return '720p HD';
+  if (pixels <= 1920 * 1080) return '1080p FHD';
+  if (pixels <= 2560 * 1440) return '1440p 2K';
+  return '4K UHD';
 }
 
 export function ExportBar({
@@ -38,6 +50,8 @@ export function ExportBar({
   onDownloadAll,
   hasActiveItem,
   activeItemType,
+  sourceWidth,
+  sourceHeight,
   totalItems,
   isProcessing,
   progressText,
@@ -59,6 +73,17 @@ export function ExportBar({
       videoFormat: fmt,
     });
   };
+
+  const videoQuality: VideoQualityPreset =
+    settings.videoQuality || settings.videoQualityProfile || 'maximum';
+
+  const bitrateBps =
+    sourceWidth && sourceHeight
+      ? computeAdaptiveVideoBitrate(sourceWidth, sourceHeight, 30, videoQuality)
+      : 16_000_000;
+  const bitrateMbps = Math.round(bitrateBps / 1_000_000);
+  const resCategory =
+    sourceWidth && sourceHeight ? getResolutionCategory(sourceWidth, sourceHeight) : 'FHD';
 
   return (
     <div className="w-full bg-card border border-border/80 rounded-xl p-4 shadow-xs">
@@ -124,7 +149,7 @@ export function ExportBar({
       ) : (
         /* Standard Export Settings and Action Bar */
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-          {/* Left: Mode Toggles & Format Settings */}
+          {/* Left: Mode Toggles & Quality Settings */}
           <div className="flex items-center gap-3 flex-wrap text-xs">
             {/* Segmented Mode Switcher for Video Assets */}
             {isVideo ? (
@@ -156,26 +181,68 @@ export function ExportBar({
 
             {/* Video Container Format Selection (Full Video Mode) */}
             {isVideo && settings.videoMode === 'full_video' ? (
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-foreground/80">Format Video:</span>
-                <select
-                  value={settings.videoFormat || 'video/webm'}
-                  onChange={(e) => handleVideoFormatChange(e.target.value as VideoContainerFormat)}
-                  className="px-2.5 py-1.5 rounded-lg border border-border bg-background text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
-                >
-                  <option value="video/webm">WebM (VP9/Opus - Efisiensi Tinggi)</option>
-                  <option value="video/mp4">MP4 (AVC1/AAC - Kompatibilitas Universal)</option>
-                </select>
+              <>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold text-foreground/90 text-xs">Format:</span>
+                  <select
+                    value={settings.videoFormat || 'video/webm'}
+                    onChange={(e) => handleVideoFormatChange(e.target.value as VideoContainerFormat)}
+                    className="h-8 px-2.5 py-1 rounded-lg border border-border bg-background text-xs font-medium text-foreground shadow-2xs focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                  >
+                    <option value="video/webm">WebM (VP9/Opus - Efisiensi Tinggi)</option>
+                    <option value="video/mp4">MP4 (AVC1/AAC - Kompatibilitas Universal)</option>
+                  </select>
+                </div>
 
-                <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-medium">
-                  🔊 Audio Sumber Aktif
-                </span>
-              </div>
+                {/* Video Quality Profile Selector */}
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold text-foreground/90 text-xs">Profil Kualitas:</span>
+                  <select
+                    value={videoQuality}
+                    onChange={(e) => {
+                      const q = e.target.value as VideoQualityPreset;
+                      onSettingsChange({
+                        ...settings,
+                        videoQuality: q,
+                        videoQualityProfile: q,
+                      });
+                    }}
+                    aria-label="Pilih profil kualitas bitrate video"
+                    className="h-8 px-2.5 py-1 rounded-lg border border-border bg-background text-xs font-medium text-foreground shadow-2xs focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                  >
+                    <option value="maximum">Maksimal (45 Mbps • Lossless & 4K)</option>
+                    <option value="high">Tinggi (16-28 Mbps • Studio & Reels)</option>
+                    <option value="standard">Standar (8-12 Mbps • Web & Mobile)</option>
+                  </select>
+                </div>
+
+                {/* Dynamic Bitrate & Resolution Indicator Badge */}
+                {sourceWidth && sourceHeight ? (
+                  <div
+                    role="status"
+                    aria-label={`Resolusi ${resCategory}, bitrate ${bitrateMbps} megabit per detik, audio 256 kilobit per detik`}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20 font-mono text-[11px] font-medium tracking-tight shadow-2xs"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 dark:bg-indigo-400 animate-pulse" />
+                    <span>
+                      {resCategory} ({sourceWidth}×{sourceHeight})
+                    </span>
+                    <span className="text-muted-foreground/60">•</span>
+                    <span className="font-bold">{bitrateMbps} Mbps</span>
+                    <span className="text-muted-foreground/60">•</span>
+                    <span>256kbps Audio</span>
+                  </div>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-medium">
+                    🔊 256kbps Audio
+                  </span>
+                )}
+              </>
             ) : (
               /* Image Format Selection (Images or Video Frame Snapshot) */
               <>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-foreground/80">Format Gambar:</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold text-foreground/90 text-xs">Format Gambar:</span>
                   <select
                     value={settings.format}
                     onChange={(e) =>
@@ -184,7 +251,7 @@ export function ExportBar({
                         format: e.target.value as ExportFormat,
                       })
                     }
-                    className="px-2.5 py-1.5 rounded-lg border border-border bg-background text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                    className="h-8 px-2.5 py-1 rounded-lg border border-border bg-background text-xs font-medium text-foreground shadow-2xs focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
                   >
                     <option value="image/png">PNG (Transparan & Lossless)</option>
                     <option value="image/jpeg">JPEG (Kualitas Foto)</option>
@@ -192,9 +259,68 @@ export function ExportBar({
                   </select>
                 </div>
 
-                {settings.format !== 'image/png' ? (
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-foreground/80">Kualitas:</span>
+                {/* Video Single-Frame Snapshot Badge */}
+                {isVideo && settings.videoMode === 'single_frame' ? (
+                  <div
+                    role="status"
+                    aria-label={`Snapshot frame native tanpa kompresi viewport ${sourceWidth || ''} ${
+                      sourceHeight ? `kali ${sourceHeight}` : ''
+                    } piksel`}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20 text-[11px] font-medium shadow-2xs"
+                  >
+                    <svg
+                      className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path
+                        d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <circle cx="12" cy="13" r="4" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <span className="font-semibold">Snapshot Native</span>
+                    {sourceWidth && sourceHeight ? (
+                      <>
+                        <span className="text-muted-foreground/60">•</span>
+                        <span className="font-mono text-[10px]">
+                          {sourceWidth}×{sourceHeight}px Unscaled
+                        </span>
+                      </>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {/* PNG Lossless Badge OR Image Quality Selector */}
+                {settings.format === 'image/png' ? (
+                  <div
+                    role="status"
+                    aria-label="Format PNG Lossless 24-bit RGBA dengan transparansi penuh"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 text-[11px] font-medium shadow-2xs"
+                  >
+                    <svg
+                      className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path
+                        d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    <span className="font-semibold">PNG Lossless</span>
+                    <span className="text-muted-foreground/60">•</span>
+                    <span className="font-mono text-[10px]">24-bit RGBA</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-foreground/90 text-xs">Kualitas:</span>
                     <select
                       value={String(settings.quality)}
                       onChange={(e) =>
@@ -203,21 +329,22 @@ export function ExportBar({
                           quality: parseFloat(e.target.value),
                         })
                       }
-                      className="px-2.5 py-1.5 rounded-lg border border-border bg-background text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                      aria-label="Pilih preset kualitas gambar kompresi"
+                      className="h-8 px-2.5 py-1 rounded-lg border border-border bg-background text-xs font-medium text-foreground shadow-2xs focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
                     >
-                      <option value="1">100% (Maksimal)</option>
-                      <option value="0.92">92% (Standar Studio)</option>
-                      <option value="0.8">80% (Optimal Web)</option>
-                      <option value="0.65">65% (Kecil)</option>
+                      <option value="1">100% (Maksimal • Pristine Fidelity)</option>
+                      <option value="0.95">95% (Studio • Master Export)</option>
+                      <option value="0.85">85% (Optimal Web • Balanced Size)</option>
+                      <option value="0.7">70% (Kecil • Compact Sharing)</option>
                     </select>
                   </div>
-                ) : null}
+                )}
               </>
             )}
 
             {/* Custom Prefix Field */}
-            <div className="flex items-center gap-2">
-              <span className="font-medium text-foreground/80">Prefix File:</span>
+            <div className="flex items-center gap-1.5">
+              <span className="font-semibold text-foreground/90 text-xs">Prefix File:</span>
               <input
                 type="text"
                 value={settings.customPrefix}
@@ -228,7 +355,7 @@ export function ExportBar({
                   })
                 }
                 placeholder="watermarked_"
-                className="w-28 px-2 py-1 rounded-lg border border-border bg-background text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-28 h-8 px-2 py-1 rounded-lg border border-border bg-background text-xs font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
           </div>

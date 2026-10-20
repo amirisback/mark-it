@@ -14,6 +14,7 @@ import {
   exportCanvasToBlob,
   triggerFileDownload,
   exportWatermarkedVideoAsync,
+  captureNativeVideoFrameAsync,
 } from '@/lib/watermark-engine';
 import { BatchTray } from './batch-tray';
 import { CanvasViewer } from './canvas-viewer';
@@ -29,7 +30,9 @@ export function StudioWorkspace() {
     format: 'image/png',
     videoFormat: 'video/webm',
     videoMode: 'full_video',
-    quality: 0.92,
+    quality: 0.95,
+    videoQuality: 'maximum',
+    videoQualityProfile: 'maximum',
     customPrefix: 'watermarked_',
   });
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -277,15 +280,20 @@ export function StudioWorkspace() {
         triggerFileDownload(blob, `${exportSettings.customPrefix}${cleanName}${extension}`);
       } else if (activeItem.type === 'video') {
         if (exportSettings.videoMode === 'single_frame') {
-          // Single frame image capture
-          setProgressText('Menyimpan frame video...');
-          if (!currentCanvasRef.current) {
-            throw new Error('Kanvas video belum siap.');
+          // Single frame image capture directly from native video buffer
+          setProgressText('Menyimpan frame video kualitas native...');
+          const videoEl = activeVideoElementRef.current;
+          if (!videoEl) {
+            throw new Error('Elemen pemutar video belum siap.');
           }
-          const blob = await exportCanvasToBlob(
-            currentCanvasRef.current,
+          const blob = await captureNativeVideoFrameAsync(
+            videoEl,
+            config,
+            logoImg,
             exportSettings.format,
-            exportSettings.quality
+            exportSettings.quality,
+            activeItem.width,
+            activeItem.height
           );
           const extension =
             exportSettings.format === 'image/png'
@@ -311,6 +319,8 @@ export function StudioWorkspace() {
             config,
             logoImg,
             mimeType: exportSettings.videoFormat,
+            qualityPreset:
+              exportSettings.videoQuality || exportSettings.videoQualityProfile || 'maximum',
             signal: abortController.signal,
             onProgress: (p) => {
               const elapsedSec = (Date.now() - startTime) / 1000;
@@ -423,19 +433,14 @@ export function StudioWorkspace() {
               };
               v.onseeked = async () => {
                 try {
-                  const offscreenCanvas = document.createElement('canvas');
-                  drawWatermarkOnCanvas(
-                    offscreenCanvas,
+                  const blob = await captureNativeVideoFrameAsync(
                     v,
-                    item.width,
-                    item.height,
                     config,
-                    logoImg
-                  );
-                  const blob = await exportCanvasToBlob(
-                    offscreenCanvas,
+                    logoImg,
                     exportSettings.format,
-                    exportSettings.quality
+                    exportSettings.quality,
+                    item.width,
+                    item.height
                   );
                   const extension =
                     exportSettings.format === 'image/png'
@@ -479,6 +484,8 @@ export function StudioWorkspace() {
               config,
               logoImg,
               mimeType: exportSettings.videoFormat,
+              qualityPreset:
+                exportSettings.videoQuality || exportSettings.videoQualityProfile || 'maximum',
               signal: abortController.signal,
               onProgress: (p) => {
                 const elapsedSec = (Date.now() - itemStartTime) / 1000;
@@ -709,6 +716,8 @@ export function StudioWorkspace() {
         onDownloadAll={handleDownloadAll}
         hasActiveItem={activeItem !== null}
         activeItemType={activeItem?.type}
+        sourceWidth={activeItem?.width}
+        sourceHeight={activeItem?.height}
         totalItems={items.length}
         isProcessing={isProcessing}
         progressText={progressText}
