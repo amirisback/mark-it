@@ -117,7 +117,7 @@ export function drawWatermarkOnCanvas(
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
-  const { frame, text, logo } = config;
+  const { frame } = config;
 
   // Tentukan apakah frame mode banner / card aktif yang mengubah rasio kanvas
   let finalCanvasWidth = sourceWidth;
@@ -157,56 +157,72 @@ export function drawWatermarkOnCanvas(
   // 2. Gambar Media Utama (Foto atau Frame Video)
   ctx.drawImage(mediaSource, mediaDrawX, mediaDrawY, mediaDrawWidth, mediaDrawHeight);
 
-  // 3. Gambar Frame Dekoratif
+  // 3. Gambar lapisan overlay watermark (frame, teks, dan logo)
+  drawWatermarkOverlays(ctx, finalCanvasWidth, finalCanvasHeight, config, logoImg);
+}
+
+/**
+ * Menggambar lapisan overlay watermark (frame dekoratif, teks watermark, dan logo)
+ * ke context Canvas pada dimensi kanvas target yang ditentukan
+ */
+export function drawWatermarkOverlays(
+  ctx: CanvasRenderingContext2D,
+  canvasWidth: number,
+  canvasHeight: number,
+  config: WatermarkFullConfig,
+  logoImg?: HTMLImageElement | null
+): void {
+  const { frame, text, logo } = config;
+
+  // 1. Gambar Frame Dekoratif
   if (frame.enabled) {
     ctx.save();
-    const borderWidth = Math.max(1, Math.round(sourceWidth * (frame.borderWidth / 100)));
+    const borderWidth = Math.max(1, Math.round(canvasWidth * (frame.borderWidth / 100)));
     ctx.lineWidth = borderWidth;
     ctx.strokeStyle = frame.borderColor;
 
     if (frame.style === 'solid') {
-      const inset = Math.round(sourceWidth * (frame.padding / 100));
-      ctx.strokeRect(inset, inset, finalCanvasWidth - inset * 2, finalCanvasHeight - inset * 2);
+      const inset = Math.round(canvasWidth * (frame.padding / 100));
+      ctx.strokeRect(inset, inset, canvasWidth - inset * 2, canvasHeight - inset * 2);
     } else if (frame.style === 'double') {
-      const inset1 = Math.round(sourceWidth * (frame.padding / 100));
+      const inset1 = Math.round(canvasWidth * (frame.padding / 100));
       const inset2 = inset1 + borderWidth * 2;
-      ctx.strokeRect(inset1, inset1, finalCanvasWidth - inset1 * 2, finalCanvasHeight - inset1 * 2);
+      ctx.strokeRect(inset1, inset1, canvasWidth - inset1 * 2, canvasHeight - inset1 * 2);
       ctx.lineWidth = Math.max(1, Math.round(borderWidth * 0.5));
-      ctx.strokeRect(inset2, inset2, finalCanvasWidth - inset2 * 2, finalCanvasHeight - inset2 * 2);
+      ctx.strokeRect(inset2, inset2, canvasWidth - inset2 * 2, canvasHeight - inset2 * 2);
     } else if (frame.style === 'dashed') {
-      const inset = Math.round(sourceWidth * (frame.padding / 100));
+      const inset = Math.round(canvasWidth * (frame.padding / 100));
       ctx.setLineDash([borderWidth * 3, borderWidth * 2]);
-      ctx.strokeRect(inset, inset, finalCanvasWidth - inset * 2, finalCanvasHeight - inset * 2);
+      ctx.strokeRect(inset, inset, canvasWidth - inset * 2, canvasHeight - inset * 2);
     } else if (frame.style === 'banner') {
-      // Banner bawah dengan metadata teks
+      const bannerHeight = Math.max(48, Math.round(canvasHeight * 0.08));
       ctx.fillStyle = frame.borderColor || '#ffffff';
-      ctx.fillRect(0, sourceHeight, finalCanvasWidth, bannerHeight);
+      ctx.fillRect(0, canvasHeight - bannerHeight, canvasWidth, bannerHeight);
 
       if (frame.metaText) {
         ctx.fillStyle = frame.metaColor || '#0f172a';
-        const fontSize = Math.max(12, Math.round((frame.metaFontSize / 100) * sourceHeight));
+        const fontSize = Math.max(12, Math.round((frame.metaFontSize / 100) * canvasHeight));
         ctx.font = `600 ${fontSize}px "Inter", sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(frame.metaText, finalCanvasWidth / 2, sourceHeight + bannerHeight / 2);
+        ctx.fillText(frame.metaText, canvasWidth / 2, canvasHeight - bannerHeight / 2);
       }
     } else if (frame.style === 'card' && frame.metaText) {
-      // Teks bawah pada gaya kartu polaroid
       ctx.fillStyle = frame.metaColor || '#0f172a';
-      const fontSize = Math.max(12, Math.round((frame.metaFontSize / 100) * sourceHeight));
+      const fontSize = Math.max(12, Math.round((frame.metaFontSize / 100) * canvasHeight));
       ctx.font = `600 ${fontSize}px "Inter", sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      const bottomAreaCenter = sourceHeight + (finalCanvasHeight - sourceHeight) / 2;
-      ctx.fillText(frame.metaText, finalCanvasWidth / 2, bottomAreaCenter);
+      const bottomAreaCenter = canvasHeight - Math.round(canvasHeight * 0.08);
+      ctx.fillText(frame.metaText, canvasWidth / 2, bottomAreaCenter);
     }
     ctx.restore();
   }
 
-  // 4. Gambar Teks Watermark
+  // 2. Gambar Teks Watermark
   if (text.enabled && text.text.trim().length > 0) {
     ctx.save();
-    const minDim = Math.min(sourceWidth, sourceHeight);
+    const minDim = Math.min(canvasWidth, canvasHeight);
     const computedFontSize = computeFontSizePixels(text.fontSize, minDim);
     const resolvedFont = resolveCanvasFontFamily(text.fontFamily);
     ctx.font = `600 ${computedFontSize}px ${resolvedFont}`;
@@ -219,15 +235,14 @@ export function drawWatermarkOnCanvas(
     ctx.globalAlpha = Math.max(0, Math.min(1, text.opacity));
 
     if (text.tile) {
-      // Diagonal repeating tile pattern
       const angleRad = (text.rotation * Math.PI) / 180;
       const step = Math.max(80, Math.round((text.tileSpacing / 100) * minDim * 0.7));
 
-      ctx.translate(finalCanvasWidth / 2, finalCanvasHeight / 2);
+      ctx.translate(canvasWidth / 2, canvasHeight / 2);
       ctx.rotate(angleRad);
-      ctx.translate(-finalCanvasWidth / 2, -finalCanvasHeight / 2);
+      ctx.translate(-canvasWidth / 2, -canvasHeight / 2);
 
-      const maxRadius = Math.sqrt(finalCanvasWidth ** 2 + finalCanvasHeight ** 2);
+      const maxRadius = Math.sqrt(canvasWidth ** 2 + canvasHeight ** 2);
       const startX = -maxRadius;
       const endX = maxRadius * 2;
       const startY = -maxRadius;
@@ -239,8 +254,7 @@ export function drawWatermarkOnCanvas(
         }
       }
     } else {
-      // Single positioned watermark
-      const coords = computeCoordinates(finalCanvasWidth, finalCanvasHeight, textWidth, textHeight, text.position);
+      const coords = computeCoordinates(canvasWidth, canvasHeight, textWidth, textHeight, text.position);
       const centerX = coords.x + textWidth / 2;
       const centerY = coords.y + textHeight / 2;
 
@@ -255,34 +269,34 @@ export function drawWatermarkOnCanvas(
     ctx.restore();
   }
 
-  // 5. Gambar Logo Watermark
+  // 3. Gambar Logo Watermark
   if (logo.enabled && logoImg) {
     ctx.save();
     const logoScale = Math.max(0.05, Math.min(0.8, logo.scale / 100));
-    const targetWidth = Math.round(sourceWidth * logoScale);
+    const targetLogoWidth = Math.round(canvasWidth * logoScale);
     const aspect = logoImg.height / logoImg.width;
-    const targetHeight = Math.round(targetWidth * aspect);
+    const targetLogoHeight = Math.round(targetLogoWidth * aspect);
 
     ctx.globalAlpha = Math.max(0, Math.min(1, logo.opacity));
 
     if (logo.tile) {
-      const step = Math.max(100, targetWidth * 1.8);
+      const step = Math.max(100, targetLogoWidth * 1.8);
       const angleRad = (logo.rotation * Math.PI) / 180;
 
-      ctx.translate(finalCanvasWidth / 2, finalCanvasHeight / 2);
+      ctx.translate(canvasWidth / 2, canvasHeight / 2);
       ctx.rotate(angleRad);
-      ctx.translate(-finalCanvasWidth / 2, -finalCanvasHeight / 2);
+      ctx.translate(-canvasWidth / 2, -canvasHeight / 2);
 
-      const maxRadius = Math.sqrt(finalCanvasWidth ** 2 + finalCanvasHeight ** 2);
+      const maxRadius = Math.sqrt(canvasWidth ** 2 + canvasHeight ** 2);
       for (let y = -maxRadius; y < maxRadius * 2; y += step) {
         for (let x = -maxRadius; x < maxRadius * 2; x += step) {
-          ctx.drawImage(logoImg, x, y, targetWidth, targetHeight);
+          ctx.drawImage(logoImg, x, y, targetLogoWidth, targetLogoHeight);
         }
       }
     } else {
-      const coords = computeCoordinates(finalCanvasWidth, finalCanvasHeight, targetWidth, targetHeight, logo.position);
-      const centerX = coords.x + targetWidth / 2;
-      const centerY = coords.y + targetHeight / 2;
+      const coords = computeCoordinates(canvasWidth, canvasHeight, targetLogoWidth, targetLogoHeight, logo.position);
+      const centerX = coords.x + targetLogoWidth / 2;
+      const centerY = coords.y + targetLogoHeight / 2;
 
       ctx.translate(centerX, centerY);
       if (logo.rotation !== 0) {
@@ -290,10 +304,68 @@ export function drawWatermarkOnCanvas(
       }
       ctx.translate(-centerX, -centerY);
 
-      ctx.drawImage(logoImg, coords.x, coords.y, targetWidth, targetHeight);
+      ctx.drawImage(logoImg, coords.x, coords.y, targetLogoWidth, targetLogoHeight);
     }
     ctx.restore();
   }
+}
+
+/**
+ * Merender media ke format rasio kanvas sosmed 720 × 1280 px
+ * Disesuaikan khusus untuk konten TikTok, Instagram Reels, dan YouTube Shorts
+ */
+export function drawWatermarkOnSocialCanvas(
+  canvas: HTMLCanvasElement,
+  mediaSource: CanvasImageSource,
+  sourceWidth: number,
+  sourceHeight: number,
+  config: WatermarkFullConfig,
+  logoImg?: HTMLImageElement | null,
+  targetWidth = 720,
+  targetHeight = 1280
+): void {
+  canvas.width = targetWidth;
+  canvas.height = targetHeight;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  applyPristineCanvasSmoothing(ctx);
+  ctx.clearRect(0, 0, targetWidth, targetHeight);
+
+  const sourceAspect = sourceWidth / sourceHeight;
+  const targetAspect = targetWidth / targetHeight; // 720 / 1280 = 0.5625
+
+  if (Math.abs(sourceAspect - targetAspect) < 0.02) {
+    // Media sudah bertipe 9:16 (seperti 720x1280 atau 1080x1920)
+    ctx.drawImage(mediaSource, 0, 0, targetWidth, targetHeight);
+  } else {
+    // Konten non-9:16 (misal lanskap 16:9 atau persegi 1:1) disesuaikan secara adaptif
+    // 1. Gambar latar belakang ambient blur khas platform sosial (TikTok / Reels)
+    ctx.save();
+    const coverScale = Math.max(targetWidth / sourceWidth, targetHeight / sourceHeight);
+    const bgW = sourceWidth * coverScale;
+    const bgH = sourceHeight * coverScale;
+    ctx.filter = 'blur(28px) brightness(0.4)';
+    ctx.drawImage(mediaSource, (targetWidth - bgW) / 2, (targetHeight - bgH) / 2, bgW, bgH);
+    ctx.restore();
+
+    // 2. Gambar media utama secara fit di tengah kanvas 720 × 1280 px dengan bayangan lembut
+    const fitScale = Math.min(targetWidth / sourceWidth, targetHeight / sourceHeight);
+    const drawW = Math.round(sourceWidth * fitScale);
+    const drawH = Math.round(sourceHeight * fitScale);
+    const drawX = Math.round((targetWidth - drawW) / 2);
+    const drawY = Math.round((targetHeight - drawH) / 2);
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+    ctx.shadowBlur = 18;
+    ctx.shadowOffsetY = 4;
+    ctx.drawImage(mediaSource, drawX, drawY, drawW, drawH);
+    ctx.restore();
+  }
+
+  // 3. Gambar lapisan dekorasi, watermark teks, dan logo pada kanvas 720 × 1280 px
+  drawWatermarkOverlays(ctx, targetWidth, targetHeight, config, logoImg);
 }
 
 /**
@@ -640,15 +712,28 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
   const combinedTracks: MediaStreamTrack[] = [canvasStream.getVideoTracks()[0], ...audioTracks];
   const recordingStream = new MediaStream(combinedTracks);
 
-  // Tentukan MIME type yang didukung
-  const mimeCandidates = [
-    mimeType,
-    'video/webm;codecs=vp9,opus',
-    'video/webm;codecs=vp8,opus',
-    'video/webm',
-    'video/mp4;codecs=avc1,mp4a',
-    'video/mp4',
-  ].filter(Boolean) as string[];
+  // Tentukan MIME type yang didukung dengan memprioritaskan format yang diminta
+  const isMp4Requested = mimeType?.includes('mp4');
+  const mimeCandidates = (
+    isMp4Requested
+      ? [
+          mimeType,
+          'video/mp4;codecs=avc1,mp4a',
+          'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+          'video/mp4',
+          'video/webm;codecs=vp9,opus',
+          'video/webm;codecs=vp8,opus',
+          'video/webm',
+        ]
+      : [
+          mimeType,
+          'video/webm;codecs=vp9,opus',
+          'video/webm;codecs=vp8,opus',
+          'video/webm',
+          'video/mp4;codecs=avc1,mp4a',
+          'video/mp4',
+        ]
+  ).filter(Boolean) as string[];
 
   let chosenMime = '';
   if (typeof MediaRecorder !== 'undefined') {
@@ -794,7 +879,7 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
       }
       cleanup();
       if (!signal?.aborted) {
-        const finalBlob = new Blob(chunks, { type: chosenMime || 'video/webm' });
+        const finalBlob = new Blob(chunks, { type: chosenMime || mimeType || 'video/mp4' });
         resolve(finalBlob);
       }
     };

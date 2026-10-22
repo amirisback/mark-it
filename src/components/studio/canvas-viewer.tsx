@@ -1,26 +1,34 @@
 'use client';
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import type { MediaItem, WatermarkFullConfig } from '@/types/watermark';
+import type { MediaItem, WatermarkFullConfig, SocialFrameType } from '@/types/watermark';
 import {
   drawWatermarkOnCanvas,
+  drawWatermarkOnSocialCanvas,
   loadImageAsync,
   applyPristineCanvasSmoothing,
 } from '@/lib/watermark-engine';
 import { Button } from '@/components/ui/button';
+import { SocialFrameOverlay } from './social-frame-overlay';
 
 export interface CanvasViewerProps {
   activeItem: MediaItem | null;
   config: WatermarkFullConfig;
+  socialFrame?: SocialFrameType;
+  onSocialFrameChange?: (frame: SocialFrameType) => void;
   onCanvasReady?: (canvas: HTMLCanvasElement) => void;
   onVideoElementReady?: (video: HTMLVideoElement | null) => void;
+  onLoadSampleClick?: () => void;
 }
 
 export function CanvasViewer({
   activeItem,
   config,
+  socialFrame: controlledSocialFrame,
+  onSocialFrameChange,
   onCanvasReady,
   onVideoElementReady,
+  onLoadSampleClick,
 }: CanvasViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -34,6 +42,19 @@ export function CanvasViewer({
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [showOriginal, setShowOriginal] = useState<boolean>(false);
   const [rawLogoImg, setRawLogoImg] = useState<HTMLImageElement | null>(null);
+
+  // Social Media Safe Zone Frame state
+  const [internalSocialFrame, setInternalSocialFrame] = useState<SocialFrameType>('none');
+  const socialFrame = controlledSocialFrame !== undefined ? controlledSocialFrame : internalSocialFrame;
+  const handleSocialFrameChange = (f: SocialFrameType) => {
+    setInternalSocialFrame(f);
+    onSocialFrameChange?.(f);
+  };
+  // Aspect ratio state for studio preview (default '9:16' per user request - 720x1280 px)
+  const [previewRatio, setPreviewRatio] = useState<'9:16' | 'original' | '1:1' | '16:9'>('9:16');
+  const [showDangerZone, setShowDangerZone] = useState<boolean>(true);
+  const [showUiMockup, setShowUiMockup] = useState<boolean>(true);
+  const [overlayOpacity, setOverlayOpacity] = useState<number>(0.85);
 
   // Load logo asynchronously when url changes
   useEffect(() => {
@@ -67,23 +88,63 @@ export function CanvasViewer({
 
       try {
         const img = await loadImageAsync(item.objectUrl);
-        if (showOriginal) {
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            canvas.width = img.width;
-            canvas.height = img.height;
-            applyPristineCanvasSmoothing(ctx);
-            ctx.drawImage(img, 0, 0);
+        if (previewRatio === '9:16') {
+          if (showOriginal) {
+            canvas.width = 720;
+            canvas.height = 1280;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              applyPristineCanvasSmoothing(ctx);
+              ctx.clearRect(0, 0, 720, 1280);
+              const sourceAspect = img.width / img.height;
+              if (Math.abs(sourceAspect - 720 / 1280) < 0.02) {
+                ctx.drawImage(img, 0, 0, 720, 1280);
+              } else {
+                ctx.save();
+                const coverScale = Math.max(720 / img.width, 1280 / img.height);
+                const bgW = img.width * coverScale;
+                const bgH = img.height * coverScale;
+                ctx.filter = 'blur(28px) brightness(0.4)';
+                ctx.drawImage(img, (720 - bgW) / 2, (1280 - bgH) / 2, bgW, bgH);
+                ctx.restore();
+
+                const fitScale = Math.min(720 / img.width, 1280 / img.height);
+                const drawW = Math.round(img.width * fitScale);
+                const drawH = Math.round(img.height * fitScale);
+                ctx.drawImage(img, (720 - drawW) / 2, (1280 - drawH) / 2, drawW, drawH);
+              }
+            }
+          } else {
+            drawWatermarkOnSocialCanvas(
+              canvas,
+              img,
+              img.width,
+              img.height,
+              config,
+              logoImageElement,
+              720,
+              1280
+            );
           }
         } else {
-          drawWatermarkOnCanvas(canvas, img, img.width, img.height, config, logoImageElement);
+          if (showOriginal) {
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              canvas.width = img.width;
+              canvas.height = img.height;
+              applyPristineCanvasSmoothing(ctx);
+              ctx.drawImage(img, 0, 0);
+            }
+          } else {
+            drawWatermarkOnCanvas(canvas, img, img.width, img.height, config, logoImageElement);
+          }
         }
         if (onCanvasReady) onCanvasReady(canvas);
       } catch (err) {
         console.error('Error rendering image to canvas:', err);
       }
     },
-    [config, logoImageElement, showOriginal, onCanvasReady]
+    [config, logoImageElement, showOriginal, previewRatio, onCanvasReady]
   );
 
   // Render frame for video
@@ -95,20 +156,60 @@ export function CanvasViewer({
     const width = video.videoWidth || 640;
     const height = video.videoHeight || 360;
 
-    if (showOriginal) {
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        canvas.width = width;
-        canvas.height = height;
-        applyPristineCanvasSmoothing(ctx);
-        ctx.drawImage(video, 0, 0, width, height);
+    if (previewRatio === '9:16') {
+      if (showOriginal) {
+        canvas.width = 720;
+        canvas.height = 1280;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          applyPristineCanvasSmoothing(ctx);
+          ctx.clearRect(0, 0, 720, 1280);
+          const sourceAspect = width / height;
+          if (Math.abs(sourceAspect - 720 / 1280) < 0.02) {
+            ctx.drawImage(video, 0, 0, 720, 1280);
+          } else {
+            ctx.save();
+            const coverScale = Math.max(720 / width, 1280 / height);
+            const bgW = width * coverScale;
+            const bgH = height * coverScale;
+            ctx.filter = 'blur(28px) brightness(0.4)';
+            ctx.drawImage(video, (720 - bgW) / 2, (1280 - bgH) / 2, bgW, bgH);
+            ctx.restore();
+
+            const fitScale = Math.min(720 / width, 1280 / height);
+            const drawW = Math.round(width * fitScale);
+            const drawH = Math.round(height * fitScale);
+            ctx.drawImage(video, (720 - drawW) / 2, (1280 - drawH) / 2, drawW, drawH);
+          }
+        }
+      } else {
+        drawWatermarkOnSocialCanvas(
+          canvas,
+          video,
+          width,
+          height,
+          config,
+          logoImageElement,
+          720,
+          1280
+        );
       }
     } else {
-      drawWatermarkOnCanvas(canvas, video, width, height, config, logoImageElement);
+      if (showOriginal) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          canvas.width = width;
+          canvas.height = height;
+          applyPristineCanvasSmoothing(ctx);
+          ctx.drawImage(video, 0, 0, width, height);
+        }
+      } else {
+        drawWatermarkOnCanvas(canvas, video, width, height, config, logoImageElement);
+      }
     }
 
     if (onCanvasReady) onCanvasReady(canvas);
-  }, [config, logoImageElement, showOriginal, onCanvasReady]);
+  }, [config, logoImageElement, showOriginal, previewRatio, onCanvasReady]);
 
   // Continuous animation frame loop during video playback
   useEffect(() => {
@@ -316,70 +417,280 @@ export function CanvasViewer({
   return (
     <div className="flex flex-col h-full bg-card border border-border/80 rounded-xl overflow-hidden shadow-xs">
       {/* Top Toolbar */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border/60 bg-secondary/30">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-foreground uppercase tracking-wide">
-            Pratinjau Studio
-          </span>
-          {activeItem ? (
-            <span className="text-[11px] font-mono text-muted-foreground bg-secondary px-2 py-0.5 rounded border border-border/50">
-              {activeItem.width} × {activeItem.height} px
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 sm:px-4 py-2 border-b border-border/60 bg-secondary/30">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block animate-pulse" />
+            <span className="text-xs font-bold text-foreground uppercase tracking-wide">
+              Pratinjau Studio
+            </span>
+            <span className="text-xs text-muted-foreground/60 font-mono">:</span>
+            <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 font-mono bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
+              {previewRatio === '9:16'
+                ? '720 × 1280 px'
+                : previewRatio === '1:1'
+                ? activeItem
+                  ? `${Math.min(activeItem.width, activeItem.height)} × ${Math.min(activeItem.width, activeItem.height)} px`
+                  : '1080 × 1080 px'
+                : previewRatio === '16:9'
+                ? activeItem
+                  ? `${activeItem.width} × ${Math.round((activeItem.width * 9) / 16)} px`
+                  : '1920 × 1080 px'
+                : activeItem
+                ? `${activeItem.width} × ${activeItem.height} px`
+                : '720 × 1280 px'}
+            </span>
+          </div>
+
+          {previewRatio === '9:16' ? (
+            <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+              Disesuaikan dengan content sosmed
             </span>
           ) : null}
+
+          {activeItem && previewRatio === '9:16' && (activeItem.width !== 720 || activeItem.height !== 1280) ? (
+            <span
+              className="text-[10px] font-mono text-muted-foreground bg-secondary/80 px-2 py-0.5 rounded border border-border/50 hidden sm:inline-block"
+              title="Dimensi asli media sebelum disesuaikan ke format sosmed 720 × 1280 px"
+            >
+              Media Asli: {activeItem.width} × {activeItem.height} px
+            </span>
+          ) : null}
+
+          {/* Aspect Ratio Selector Pill */}
+          <div className="flex items-center bg-background/90 dark:bg-card/90 p-0.5 rounded-lg border border-border/70 text-[11px] font-medium shadow-2xs">
+            <button
+              type="button"
+              onClick={() => setPreviewRatio('9:16')}
+              className={`px-2 py-0.5 rounded-md transition-colors cursor-pointer flex items-center gap-1 ${
+                previewRatio === '9:16'
+                  ? 'bg-indigo-600 text-white font-semibold shadow-2xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+              title="Kunci Rasio Pratinjau 720 × 1280 px (Format Vertikal Sosmed TikTok / Reels / Shorts)"
+            >
+              <span>720×1280</span>
+              <span className="text-[9px] opacity-90 font-bold hidden sm:inline">9:16 Sosmed</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setPreviewRatio('original')}
+              className={`px-2 py-0.5 rounded-md transition-colors cursor-pointer ${
+                previewRatio === 'original'
+                  ? 'bg-indigo-600 text-white font-semibold shadow-2xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+              title="Gunakan rasio asli dari media yang diunggah"
+            >
+              Asli
+            </button>
+            <button
+              type="button"
+              onClick={() => setPreviewRatio('1:1')}
+              className={`px-2 py-0.5 rounded-md transition-colors cursor-pointer ${
+                previewRatio === '1:1'
+                  ? 'bg-indigo-600 text-white font-semibold shadow-2xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+              title="Rasio 1:1 Persegi (Post Instagram)"
+            >
+              1:1
+            </button>
+            <button
+              type="button"
+              onClick={() => setPreviewRatio('16:9')}
+              className={`px-2 py-0.5 rounded-md transition-colors cursor-pointer ${
+                previewRatio === '16:9'
+                  ? 'bg-indigo-600 text-white font-semibold shadow-2xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+              title="Rasio 16:9 Lanskap (YouTube Standar)"
+            >
+              16:9
+            </button>
+          </div>
         </div>
 
-        {/* Zoom & View Controls */}
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => setShowOriginal(!showOriginal)}
-            className={`px-2.5 py-1 text-xs rounded-md border font-medium cursor-pointer transition-colors ${
-              showOriginal
-                ? 'bg-amber-500 text-white border-amber-600'
-                : 'bg-background hover:bg-secondary text-muted-foreground border-border/60'
-            }`}
-            title="Tahan untuk melihat file asli tanpa watermark"
-          >
-            {showOriginal ? 'Mode Asli' : 'Bandingkan Asli'}
-          </button>
+        {/* Right side: Frame Sosmed & Zoom & Bandingkan Asli */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Social Frame / Safe Zone Selector */}
+          <div className="flex items-center gap-1 bg-background/90 dark:bg-card/90 p-1 rounded-lg border border-border/70 shadow-2xs">
+            <span className="text-[11px] font-semibold text-muted-foreground px-1 flex items-center gap-1">
+              <svg className="w-3.5 h-3.5 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <rect x="5" y="2" width="14" height="20" rx="3" />
+                <line x1="12" y1="18" x2="12.01" y2="18" strokeWidth={3} strokeLinecap="round" />
+              </svg>
+              <span className="hidden xl:inline">Frame:</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => handleSocialFrameChange('none')}
+              className={`px-2 py-0.5 text-xs rounded-md font-medium transition-colors cursor-pointer ${
+                socialFrame === 'none'
+                  ? 'bg-secondary text-foreground font-semibold shadow-2xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+              title="Matikan panduan frame sosmed"
+            >
+              Mati
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSocialFrameChange('tiktok')}
+              className={`px-2 py-0.5 text-xs rounded-md font-medium transition-colors cursor-pointer ${
+                socialFrame === 'tiktok'
+                  ? 'bg-rose-500/15 text-rose-500 dark:text-rose-400 font-semibold border border-rose-500/30 shadow-2xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+              title="Tampilkan Safe Zone & Mockup Tombol TikTok"
+            >
+              TikTok
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSocialFrameChange('reels')}
+              className={`px-2 py-0.5 text-xs rounded-md font-medium transition-colors cursor-pointer ${
+                socialFrame === 'reels'
+                  ? 'bg-purple-500/15 text-purple-600 dark:text-purple-400 font-semibold border border-purple-500/30 shadow-2xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+              title="Tampilkan Safe Zone & Mockup Tombol Instagram Reels"
+            >
+              IG Reels
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSocialFrameChange('shorts')}
+              className={`px-2 py-0.5 text-xs rounded-md font-medium transition-colors cursor-pointer ${
+                socialFrame === 'shorts'
+                  ? 'bg-red-500/15 text-red-600 dark:text-red-400 font-semibold border border-red-500/30 shadow-2xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+              title="Tampilkan Safe Zone & Mockup Tombol YouTube Shorts"
+            >
+              YT Shorts
+            </button>
+          </div>
 
-          <div className="h-4 w-px bg-border mx-1" />
+          {/* Zoom & View Controls */}
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setShowOriginal(!showOriginal)}
+              className={`px-2 py-1 text-xs rounded-md border font-medium cursor-pointer transition-colors ${
+                showOriginal
+                  ? 'bg-amber-500 text-white border-amber-600'
+                  : 'bg-background hover:bg-secondary text-muted-foreground border-border/60'
+              }`}
+              title="Tahan untuk melihat file asli tanpa watermark"
+            >
+              {showOriginal ? 'Asli' : 'Bandingkan'}
+            </button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setZoomLevel((z) => Math.max(25, z - 15))}
-            title="Perkecil"
-            className="h-7 px-2 text-xs"
-          >
-            -
-          </Button>
-          <span className="text-[11px] font-mono text-muted-foreground w-12 text-center">
-            {zoomLevel}%
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setZoomLevel((z) => Math.min(200, z + 15))}
-            title="Perbesar"
-            className="h-7 px-2 text-xs"
-          >
-            +
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setZoomLevel(100)}
-            title="Reset ke 100%"
-            className="h-7 px-2 text-xs"
-          >
-            Reset
-          </Button>
+            <div className="h-4 w-px bg-border mx-0.5" />
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setZoomLevel((z) => Math.max(50, z - 15))}
+              title="Perkecil"
+              className="h-7 px-1.5 text-xs"
+            >
+              -
+            </Button>
+            <span className="text-[11px] font-mono text-muted-foreground w-11 text-center font-medium">
+              {zoomLevel}%
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setZoomLevel((z) => Math.min(200, z + 15))}
+              title="Perbesar"
+              className="h-7 px-1.5 text-xs"
+            >
+              +
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setZoomLevel(100)}
+              title="Reset ke 100% (Fit tanpa scroll)"
+              className="h-7 px-1.5 text-xs text-indigo-500 hover:text-indigo-400 font-medium"
+            >
+              Reset
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* Main Canvas Viewport */}
-      <div className="relative flex-1 min-h-[380px] sm:min-h-[460px] max-h-[640px] overflow-auto canvas-checkerboard flex items-center justify-center p-4">
+      {/* Social Safe Zone Sub-Bar (Active when a frame is chosen) */}
+      {socialFrame !== 'none' && (
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3 sm:px-4 py-1.5 bg-background/60 border-b border-border/50 text-[11px]">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-foreground/90 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse" />
+              Panduan Safe Zone:{' '}
+              <span className="capitalize text-indigo-600 dark:text-indigo-400 font-bold">
+                {socialFrame === 'reels' ? 'Instagram Reels' : socialFrame === 'shorts' ? 'YouTube Shorts' : 'TikTok'}
+              </span>
+            </span>
+            <span className="text-muted-foreground hidden lg:inline">|</span>
+            <span className="text-muted-foreground hidden lg:inline">
+              Pastikan watermark berada di dalam garis hijau agar bebas dari tombol & teks sosmed.
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Danger Zone toggle */}
+            <button
+              type="button"
+              onClick={() => setShowDangerZone(!showDangerZone)}
+              className={`px-2 py-0.5 rounded text-[11px] font-medium border cursor-pointer transition-colors ${
+                showDangerZone
+                  ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30'
+                  : 'bg-background text-muted-foreground border-border/60 hover:text-foreground'
+              }`}
+              title="Tampilkan / sembunyikan area bahaya (merah) & aman (hijau)"
+            >
+              Zona Bahaya: {showDangerZone ? 'ON' : 'OFF'}
+            </button>
+
+            {/* UI Mockup toggle */}
+            <button
+              type="button"
+              onClick={() => setShowUiMockup(!showUiMockup)}
+              className={`px-2 py-0.5 rounded text-[11px] font-medium border cursor-pointer transition-colors ${
+                showUiMockup
+                  ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/30'
+                  : 'bg-background text-muted-foreground border-border/60 hover:text-foreground'
+              }`}
+              title="Tampilkan / sembunyikan mockup tombol & avatar sosmed"
+            >
+              Tombol UI: {showUiMockup ? 'ON' : 'OFF'}
+            </button>
+
+            {/* Opacity Cycle Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setOverlayOpacity((prev) => (prev >= 0.9 ? 0.45 : prev >= 0.65 ? 0.95 : 0.7));
+              }}
+              className="px-2 py-0.5 rounded text-[11px] font-mono text-muted-foreground hover:text-foreground bg-secondary/60 hover:bg-secondary border border-border/60 cursor-pointer"
+              title="Ubah opasitas panduan overlay"
+            >
+              Opasitas: {Math.round(overlayOpacity * 100)}%
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Main Canvas Viewport - 9:16 Adaptive Frame with Zero Scroll at 100% */}
+      <div
+        className={`relative flex-1 min-h-[380px] sm:min-h-[420px] max-h-[580px] lg:max-h-[calc(100dvh-260px)] ${
+          zoomLevel > 100 ? 'overflow-auto' : 'overflow-hidden'
+        } canvas-checkerboard flex items-center justify-center p-3 sm:p-4`}
+      >
         {/* Hidden video decoder element */}
         <video
           ref={videoRef}
@@ -395,34 +706,99 @@ export function CanvasViewer({
         />
 
         {activeItem ? (
-          <div
-            className="transition-transform duration-100 ease-out shadow-2xl rounded-sm overflow-hidden"
-            style={{
-              transform: `scale(${zoomLevel / 100})`,
-              transformOrigin: 'center center',
-            }}
-          >
-            <canvas ref={canvasRef} className="block max-w-full h-auto bg-transparent" />
+          <div className="relative flex items-center justify-center w-full h-full max-h-full max-w-full">
+            {/* Phone-like 9:16 Frame */}
+            <div
+              className={`relative flex items-center justify-center shadow-2xl transition-all duration-150 overflow-hidden ${
+                previewRatio === '9:16'
+                  ? 'rounded-3xl border-[3px] border-slate-700/80 dark:border-slate-800 bg-black'
+                  : 'rounded-lg border border-border/70 bg-black/80'
+              }`}
+              style={{
+                aspectRatio:
+                  previewRatio === '9:16'
+                    ? '9 / 16'
+                    : previewRatio === '1:1'
+                    ? '1 / 1'
+                    : previewRatio === '16:9'
+                    ? '16 / 9'
+                    : activeItem
+                    ? `${activeItem.width} / ${activeItem.height}`
+                    : '9 / 16',
+                height: '100%',
+                maxHeight: '100%',
+                maxWidth: '100%',
+                width: 'auto',
+                transform: zoomLevel !== 100 ? `scale(${zoomLevel / 100})` : undefined,
+                transformOrigin: 'center center',
+              }}
+            >
+              {/* Dynamic Island / Camera Notch Accent for 9:16 smartphone preview */}
+              {previewRatio === '9:16' && (
+                <div className="absolute top-2 inset-x-0 flex justify-center pointer-events-none z-30">
+                  <div className="w-16 h-3 bg-black/85 rounded-full border border-white/10 flex items-center justify-end px-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-500/70" />
+                  </div>
+                </div>
+              )}
+
+              {/* The high-res watermark canvas */}
+              <canvas
+                ref={canvasRef}
+                className="w-full h-full object-contain block bg-transparent"
+              />
+
+              {/* Safe zone overlay */}
+              <SocialFrameOverlay
+                frame={socialFrame}
+                showDangerZone={showDangerZone}
+                showUiElements={showUiMockup}
+                opacity={overlayOpacity}
+              />
+            </div>
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center text-center p-8 max-w-sm text-muted-foreground">
-            <div className="w-16 h-16 mb-3 rounded-2xl bg-secondary/80 flex items-center justify-center text-muted-foreground">
-              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                />
-              </svg>
+          <div className="flex flex-col items-center justify-center text-center p-4 max-w-sm text-muted-foreground w-full h-full">
+            <div
+              className="relative w-48 sm:w-56 shadow-2xl rounded-3xl border-2 border-dashed border-indigo-500/40 bg-secondary/30 flex flex-col items-center justify-between p-4 transition-all overflow-hidden"
+              style={{ aspectRatio: '9 / 16' }}
+            >
+              {/* Dynamic island accent */}
+              <div className="w-16 h-3 bg-black/70 rounded-full border border-white/10 flex items-center justify-end px-2 mb-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-indigo-500/70" />
+              </div>
+
+              <div className="flex flex-col items-center my-auto">
+                <div className="w-12 h-12 mb-2.5 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-500 border border-indigo-500/30 shadow-xs">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <rect x="5" y="2" width="14" height="20" rx="3" strokeWidth={1.5} />
+                    <line x1="12" y1="18" x2="12.01" y2="18" strokeWidth={2.5} strokeLinecap="round" />
+                  </svg>
+                </div>
+                <p className="text-xs font-bold text-foreground">Pratinjau Studio 720 × 1280 px</p>
+                <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5">
+                  Format Vertikal Sosmed 9:16
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-2 leading-relaxed px-1">
+                  Kanvas siap untuk konten TikTok, Reels, dan YouTube Shorts.
+                </p>
+              </div>
+
+              {onLoadSampleClick ? (
+                <Button
+                  variant="brand"
+                  size="sm"
+                  onClick={onLoadSampleClick}
+                  className="w-full text-xs h-8 shadow-xs mt-2"
+                >
+                  ✦ Muat Contoh Sosmed
+                </Button>
+              ) : null}
             </div>
-            <p className="text-sm font-medium text-foreground">Kanvas Kosong</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Pilih salah satu file di antrean batch atau unggah media baru untuk melihat pratinjau watermark.
-            </p>
           </div>
         )}
       </div>
+
 
       {/* Video Scrubber Controls (Shown only when media is video) */}
       {activeItem?.type === 'video' ? (

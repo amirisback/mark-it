@@ -190,4 +190,28 @@ export const WATERMARK_PRESETS: WatermarkPreset[] = [
       },
     },
   },
+  {
+    id: 'social-safe-shortform',
+    name: 'Safe Zone TikTok / Reels / Shorts',
+    description: 'Format penempatan watermark khusus video vertikal 9:16 yang terbukti bebas dari tombol like, share, caption, dan header sosmed.',
+    category: 'branding',
+    badge: 'Shorts/Reels',
+    config: {
+      text: {
+        enabled: true,
+        text: '@yourbrand.video',
+        fontSize: 3.6,
+        color: '#ffffff',
+        opacity: 0.9,
+        rotation: 0,
+        shadow: true,
+        shadowColor: '#000000',
+        shadowBlur: 8,
+        tile: false,
+        position: { grid: 'top-left', offsetX: 8, offsetY: 16 },
+      },
+      frame: { enabled: false, style: 'none' },
+    },
+  },
 ];
+

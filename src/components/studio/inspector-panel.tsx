@@ -7,6 +7,7 @@ import type {
   GridPosition,
   FrameStyle,
   WatermarkPreset,
+  SocialFrameType,
 } from '@/types/watermark';
 import { WATERMARK_PRESETS } from '@/data/presets';
 import { CURATED_FONTS, FONT_CATEGORIES, FONT_SIZE_PRESETS } from '@/data/fonts';
@@ -20,11 +21,19 @@ export interface InspectorPanelProps {
   config: WatermarkFullConfig;
   onChange: (updated: WatermarkFullConfig) => void;
   onApplyPreset: (preset: WatermarkPreset) => void;
+  socialFrame?: SocialFrameType;
+  onSocialFrameChange?: (frame: SocialFrameType) => void;
 }
 
 type TabKey = 'text' | 'logo' | 'frame' | 'position' | 'presets';
 
-export function InspectorPanel({ config, onChange, onApplyPreset }: InspectorPanelProps) {
+export function InspectorPanel({
+  config,
+  onChange,
+  onApplyPreset,
+  socialFrame = 'none',
+  onSocialFrameChange,
+}: InspectorPanelProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('text');
 
   // Update text partial
@@ -550,15 +559,141 @@ export function InspectorPanel({ config, onChange, onApplyPreset }: InspectorPan
                 ) : null}
               </div>
             ) : null}
+
+            {/* Hint for Social Media Safe Zone Frame */}
+            <div className="p-3 bg-secondary/40 rounded-xl border border-border/70 text-xs text-muted-foreground flex items-start gap-2.5">
+              <span className="text-base shrink-0">📱</span>
+              <div className="space-y-1">
+                <p className="font-semibold text-foreground text-xs">
+                  Mencari Frame Safe Zone TikTok / Reels / Shorts?
+                </p>
+                <p className="text-[11px] leading-relaxed">
+                  Fitur panduan posisi bebas halangan tombol sosmed tersedia di tab{' '}
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('position')}
+                    className="text-indigo-600 dark:text-indigo-400 font-semibold underline underline-offset-2 hover:opacity-80 cursor-pointer"
+                  >
+                    Posisi
+                  </button>{' '}
+                  atau tombol <strong>Frame Sosmed</strong> di toolbar atas pratinjau.
+                </p>
+              </div>
+            </div>
           </div>
         ) : null}
 
-        {/* TAB 4: POSISI 9-GRID */}
+        {/* TAB 4: POSISI 9-GRID & SAFE ZONE SOSMED */}
         {activeTab === 'position' ? (
           <div className="space-y-4">
+            {/* Safe Zone Frame Sosmed Selector */}
+            <div className="p-3 rounded-xl border border-border/80 bg-secondary/30 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                    <svg className="w-4 h-4 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                      <rect x="5" y="2" width="14" height="20" rx="3" />
+                      <line x1="12" y1="18" x2="12.01" y2="18" strokeWidth={3} strokeLinecap="round" />
+                    </svg>
+                    Panduan Safe Zone Sosmed
+                  </span>
+                </div>
+                {socialFrame !== 'none' ? (
+                  <Badge variant="brand" className="text-[10px] uppercase font-mono">
+                    {socialFrame}
+                  </Badge>
+                ) : null}
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                Tampilkan mockup tombol & batas aman agar watermark tidak tertutup tombol like, komentar, share, atau caption.
+              </p>
+
+              {/* 4 buttons for socialFrame */}
+              <div className="grid grid-cols-4 gap-1.5">
+                {[
+                  { id: 'none', label: 'Mati' },
+                  { id: 'tiktok', label: 'TikTok' },
+                  { id: 'reels', label: 'IG Reels' },
+                  { id: 'shorts', label: 'YT Shorts' },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => onSocialFrameChange?.(item.id as SocialFrameType)}
+                    className={`py-1.5 px-1 text-xs font-medium rounded-lg border text-center transition-all cursor-pointer ${
+                      socialFrame === item.id
+                        ? 'border-indigo-600 bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 font-semibold ring-1 ring-indigo-500/30'
+                        : 'border-border/60 hover:bg-secondary text-muted-foreground'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Recommended Safe Presets for 1-click snapping */}
+              {socialFrame !== 'none' ? (
+                <div className="pt-2 border-t border-border/40 space-y-1.5">
+                  <span className="text-[10px] font-semibold text-foreground/80 uppercase tracking-wider block">
+                    Posisi Rekomendasi Bebas Tombol:
+                  </span>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        updatePosition('top-left');
+                        updateOffsets(8, 16);
+                      }}
+                      className="text-[11px] h-7.5 justify-start px-2 text-foreground/90 border-border/70 hover:border-emerald-500/60"
+                      title="Posisi Kiri Atas di bawah header sosmed"
+                    >
+                      ↖ Kiri Atas Aman
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        updatePosition('top-right');
+                        updateOffsets(-18, 16);
+                      }}
+                      className="text-[11px] h-7.5 justify-start px-2 text-foreground/90 border-border/70 hover:border-emerald-500/60"
+                      title="Posisi Kanan Atas di samping tombol cari"
+                    >
+                      ↗ Kanan Atas Aman
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        updatePosition('center');
+                        updateOffsets(0, -6);
+                      }}
+                      className="text-[11px] h-7.5 justify-start px-2 text-foreground/90 border-border/70 hover:border-emerald-500/60"
+                      title="Posisi Tengah (paling aman dari halangan tombol)"
+                    >
+                      • Tengah Aman
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        updatePosition('bottom-left');
+                        updateOffsets(8, -28);
+                      }}
+                      className="text-[11px] h-7.5 justify-start px-2 text-foreground/90 border-border/70 hover:border-emerald-500/60"
+                      title="Posisi di atas teks profil & caption"
+                    >
+                      ↙ Di Atas Caption
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
             <div>
               <label className="text-xs font-medium text-foreground/80 block mb-2">
-                Pilih Titik Posisi Watermark
+                Pilih Titik Posisi Watermark (9-Grid)
               </label>
               <div className="grid grid-cols-3 gap-2">
                 {GRID_POSITIONS.map((pos) => {

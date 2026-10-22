@@ -6,6 +6,7 @@ import type {
   WatermarkFullConfig,
   ExportSettings,
   WatermarkPreset,
+  SocialFrameType,
 } from '@/types/watermark';
 import { DEFAULT_WATERMARK_CONFIG } from '@/data/presets';
 import {
@@ -26,9 +27,10 @@ export function StudioWorkspace() {
   const [items, setItems] = useState<MediaItem[]>([]);
   const [activeIndex, setActiveIndex] = useState<number>(0);
   const [config, setConfig] = useState<WatermarkFullConfig>(DEFAULT_WATERMARK_CONFIG);
+  const [socialFrame, setSocialFrame] = useState<SocialFrameType>('none');
   const [exportSettings, setExportSettings] = useState<ExportSettings>({
     format: 'image/png',
-    videoFormat: 'video/webm',
+    videoFormat: 'video/mp4',
     videoMode: 'full_video',
     quality: 0.95,
     videoQuality: 'maximum',
@@ -549,56 +551,98 @@ export function StudioWorkspace() {
     }
   };
 
-  // Helper to load sample test images directly
-  const loadSampleImage = async () => {
-    // Generate a high-contrast sample gradient canvas
-    const sampleCanvas = document.createElement('canvas');
-    sampleCanvas.width = 1600;
-    sampleCanvas.height = 1000;
-    const ctx = sampleCanvas.getContext('2d');
-    if (!ctx) return;
+  // Helper to load sample test images directly (720x1280 px vertical for social media)
+  const loadSampleImage = useCallback(
+    async (aspect: 'vertical' | 'landscape' = 'vertical') => {
+      const isVertical = aspect === 'vertical';
+      const sampleCanvas = document.createElement('canvas');
+      sampleCanvas.width = isVertical ? 720 : 1600;
+      sampleCanvas.height = isVertical ? 1280 : 1000;
+      const ctx = sampleCanvas.getContext('2d');
+      if (!ctx) return;
 
-    // Stylish camera/studio darkroom gradient
-    const grad = ctx.createLinearGradient(0, 0, 1600, 1000);
-    grad.addColorStop(0, '#1e1b4b');
-    grad.addColorStop(0.5, '#312e81');
-    grad.addColorStop(1, '#0f172a');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, 1600, 1000);
+      // Stylish camera/studio darkroom gradient
+      const grad = ctx.createLinearGradient(0, 0, sampleCanvas.width, sampleCanvas.height);
+      grad.addColorStop(0, '#0f172a');
+      grad.addColorStop(0.3, '#1e1b4b');
+      grad.addColorStop(0.7, '#312e81');
+      grad.addColorStop(1, '#090d16');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, sampleCanvas.width, sampleCanvas.height);
 
-    // Decorative geometric aperture rings
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.arc(800, 500, 320, 0, Math.PI * 2);
-    ctx.stroke();
+      // Decorative geometric aperture rings
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(
+        sampleCanvas.width / 2,
+        sampleCanvas.height / 2,
+        isVertical ? 240 : 320,
+        0,
+        Math.PI * 2
+      );
+      ctx.stroke();
 
-    ctx.strokeStyle = 'rgba(99, 102, 241, 0.4)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(800, 500, 220, 0, Math.PI * 2);
-    ctx.stroke();
+      ctx.strokeStyle = 'rgba(99, 102, 241, 0.4)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(
+        sampleCanvas.width / 2,
+        sampleCanvas.height / 2,
+        isVertical ? 160 : 220,
+        0,
+        Math.PI * 2
+      );
+      ctx.stroke();
 
-    // Central label
-    ctx.font = 'bold 42px system-ui, sans-serif';
-    ctx.fillStyle = '#f8fafc';
-    ctx.textAlign = 'center';
-    ctx.fillText('MarkIt Studio Sample Media', 800, 480);
-    ctx.font = '24px system-ui, sans-serif';
-    ctx.fillStyle = '#94a3b8';
-    ctx.fillText('1600 × 1000 • Studio Testing Landscape', 800, 540);
+      // Central label
+      ctx.font = 'bold 36px system-ui, sans-serif';
+      ctx.fillStyle = '#f8fafc';
+      ctx.textAlign = 'center';
+      ctx.fillText(
+        isVertical ? 'Sample Media Vertikal 9:16' : 'MarkIt Studio Sample Media',
+        sampleCanvas.width / 2,
+        sampleCanvas.height / 2 - 20
+      );
+      ctx.font = '20px system-ui, sans-serif';
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillText(
+        isVertical
+          ? '720 × 1280 • TikTok / Reels / Shorts Ready'
+          : '1600 × 1000 • Studio Testing Landscape',
+        sampleCanvas.width / 2,
+        sampleCanvas.height / 2 + 30
+      );
 
-    sampleCanvas.toBlob(async (blob) => {
-      if (!blob) return;
-      const file = new File([blob], 'contoh_foto_studio.png', { type: 'image/png' });
-      await handleAddFiles([file]);
-    });
-  };
+      sampleCanvas.toBlob(async (blob) => {
+        if (!blob) return;
+        const file = new File(
+          [blob],
+          isVertical ? 'contoh_vertikal_9-16.png' : 'contoh_foto_studio.png',
+          { type: 'image/png' }
+        );
+        if (isVertical && socialFrame === 'none') {
+          setSocialFrame('tiktok');
+        }
+        await handleAddFiles([file]);
+      });
+    },
+    [handleAddFiles, socialFrame]
+  );
+
+  // Auto-initialize 720 × 1280 px vertical social media sample on first load
+  const hasAutoLoadedSampleRef = useRef<boolean>(false);
+  useEffect(() => {
+    if (!hasAutoLoadedSampleRef.current && items.length === 0) {
+      hasAutoLoadedSampleRef.current = true;
+      loadSampleImage('vertical');
+    }
+  }, [items.length, loadSampleImage]);
 
   return (
     <section
       id="studio"
-      className="scroll-mt-20 py-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-6"
+      className="scroll-mt-20 py-5 sm:py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-4"
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -617,14 +661,15 @@ export function StudioWorkspace() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
           <Button
             variant="outline"
             size="sm"
-            onClick={loadSampleImage}
+            onClick={() => loadSampleImage('vertical')}
             className="text-xs border-indigo-500/30 hover:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
+            title="Muat media vertikal 9:16 untuk simulasi TikTok, Reels, atau Shorts"
           >
-            ✦ Muat Contoh Media
+            ✦ Contoh 9:16 Sosmed
           </Button>
 
           <Button
@@ -695,27 +740,32 @@ export function StudioWorkspace() {
       />
 
       {/* Main Studio Workspace: Left = Live Canvas, Right = Inspector Settings */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Column: Canvas Preview Viewport (7 Cols on desktop) */}
-        <div className="lg:col-span-7 xl:col-span-8 flex flex-col gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+        {/* Left Column: Canvas Preview Viewport (6 Cols on desktop) */}
+        <div className="lg:col-span-6 xl:col-span-6 flex flex-col h-full">
           <CanvasViewer
             activeItem={activeItem}
             config={config}
+            socialFrame={socialFrame}
+            onSocialFrameChange={setSocialFrame}
             onCanvasReady={(cvs) => {
               currentCanvasRef.current = cvs;
             }}
             onVideoElementReady={(v) => {
               activeVideoElementRef.current = v;
             }}
+            onLoadSampleClick={() => loadSampleImage('vertical')}
           />
         </div>
 
-        {/* Right Column: Watermark Controls Inspector (5 Cols on desktop) */}
-        <div className="lg:col-span-5 xl:col-span-4 h-full">
+        {/* Right Column: Watermark Controls Inspector (6 Cols on desktop) */}
+        <div className="lg:col-span-6 xl:col-span-6 flex flex-col h-full">
           <InspectorPanel
             config={config}
             onChange={(updated) => setConfig(updated)}
             onApplyPreset={handleApplyPreset}
+            socialFrame={socialFrame}
+            onSocialFrameChange={setSocialFrame}
           />
         </div>
       </div>

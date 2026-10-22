@@ -185,12 +185,12 @@ export function ExportBar({
                 <div className="flex items-center gap-1.5">
                   <span className="font-semibold text-foreground/90 text-xs">Format:</span>
                   <select
-                    value={settings.videoFormat || 'video/webm'}
+                    value={settings.videoFormat || 'video/mp4'}
                     onChange={(e) => handleVideoFormatChange(e.target.value as VideoContainerFormat)}
                     className="h-8 px-2.5 py-1 rounded-lg border border-border bg-background text-xs font-medium text-foreground shadow-2xs focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
                   >
-                    <option value="video/webm">WebM (VP9/Opus - Efisiensi Tinggi)</option>
                     <option value="video/mp4">MP4 (AVC1/AAC - Kompatibilitas Universal)</option>
+                    <option value="video/webm">WebM (VP9/Opus - Efisiensi Tinggi)</option>
                   </select>
                 </div>
 

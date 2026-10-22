@@ -140,3 +140,13 @@ export interface FontSizePreset {
   label: string;
   value: number; // Percentage 0.5 to 30.0
 }
+
+export type SocialFrameType = 'none' | 'tiktok' | 'reels' | 'shorts';
+
+export interface SocialFrameConfig {
+  type: SocialFrameType;
+  showDangerZone: boolean;
+  showUiMockup: boolean;
+  opacity: number;
+}
+
