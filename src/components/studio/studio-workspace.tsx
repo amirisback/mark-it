@@ -468,52 +468,64 @@ export function StudioWorkspace() {
               tempVideo.crossOrigin = 'anonymous';
             }
             tempVideo.playsInline = true;
+            tempVideo.style.position = 'fixed';
+            tempVideo.style.top = '-9999px';
+            tempVideo.style.left = '-9999px';
+            tempVideo.style.width = '1px';
+            tempVideo.style.height = '1px';
+            tempVideo.style.opacity = '0';
+            tempVideo.style.pointerEvents = 'none';
+            document.body.appendChild(tempVideo);
 
-            await new Promise<void>((resolve, reject) => {
-              tempVideo.onloadedmetadata = () => resolve();
-              tempVideo.onerror = (e) =>
-                reject(new Error(`Gagal memuat metadata video: ${String(e)}`));
-              tempVideo.src = item.objectUrl;
-            });
+            try {
+              await new Promise<void>((resolve, reject) => {
+                tempVideo.onloadedmetadata = () => resolve();
+                tempVideo.onerror = (e) =>
+                  reject(new Error(`Gagal memuat metadata video: ${String(e)}`));
+                tempVideo.src = item.objectUrl;
+              });
 
-            const blob = await exportWatermarkedVideoAsync({
-              videoElement: tempVideo,
-              sourceWidth: item.width,
-              sourceHeight: item.height,
-              duration: item.duration || tempVideo.duration || 0,
-              config,
-              logoImg,
-              mimeType: exportSettings.videoFormat,
-              qualityPreset:
-                exportSettings.videoQuality || exportSettings.videoQualityProfile || 'maximum',
-              signal: abortController.signal,
-              onProgress: (p) => {
-                const elapsedSec = (Date.now() - itemStartTime) / 1000;
-                let estRemaining = 0;
-                if (p.percent > 0) {
-                  const totalEst = elapsedSec / (p.percent / 100);
-                  estRemaining = Math.max(0, totalEst - elapsedSec);
-                }
-                setVideoProgress({
-                  percent: p.percent,
-                  currentTime: p.currentTime,
-                  totalTime: p.totalTime,
-                  elapsedFormatted: formatSeconds(elapsedSec),
-                  remainingFormatted: formatSeconds(estRemaining),
-                });
-                setProgressText(
-                  `Video ${i + 1}/${items.length} (${p.percent}%): ${formatSeconds(
-                    p.currentTime
-                  )}/${formatSeconds(p.totalTime)}`
-                );
-              },
-            });
+              const blob = await exportWatermarkedVideoAsync({
+                videoElement: tempVideo,
+                sourceWidth: item.width,
+                sourceHeight: item.height,
+                duration: item.duration || tempVideo.duration || 0,
+                config,
+                logoImg,
+                mimeType: exportSettings.videoFormat,
+                qualityPreset:
+                  exportSettings.videoQuality || exportSettings.videoQualityProfile || 'maximum',
+                signal: abortController.signal,
+                onProgress: (p) => {
+                  const elapsedSec = (Date.now() - itemStartTime) / 1000;
+                  let estRemaining = 0;
+                  if (p.percent > 0) {
+                    const totalEst = elapsedSec / (p.percent / 100);
+                    estRemaining = Math.max(0, totalEst - elapsedSec);
+                  }
+                  setVideoProgress({
+                    percent: p.percent,
+                    currentTime: p.currentTime,
+                    totalTime: p.totalTime,
+                    elapsedFormatted: formatSeconds(elapsedSec),
+                    remainingFormatted: formatSeconds(estRemaining),
+                  });
+                  setProgressText(
+                    `Video ${i + 1}/${items.length} (${p.percent}%): ${formatSeconds(
+                      p.currentTime
+                    )}/${formatSeconds(p.totalTime)}`
+                  );
+                },
+              });
 
-            const ext =
-              exportSettings.videoFormat === 'video/mp4' || blob.type.includes('mp4')
-                ? '.mp4'
-                : '.webm';
-            triggerFileDownload(blob, `${exportSettings.customPrefix}${cleanName}${ext}`);
+              const ext =
+                exportSettings.videoFormat === 'video/mp4' || blob.type.includes('mp4')
+                  ? '.mp4'
+                  : '.webm';
+              triggerFileDownload(blob, `${exportSettings.customPrefix}${cleanName}${ext}`);
+            } finally {
+              tempVideo.remove();
+            }
           }
         }
 

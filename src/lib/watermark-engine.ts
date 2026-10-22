@@ -697,43 +697,76 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
   const prevPaused = videoElement.paused;
 
   let isCleanedUp = false;
-  // Cleanup helper
-  const cleanup = () => {
-    if (isCleanedUp) return;
-    isCleanedUp = true;
-    combinedTracks.forEach((track) => track.stop());
-    canvasStream.getTracks().forEach((track) => track.stop());
-    videoElement.muted = prevMuted;
-    videoElement.volume = prevVolume;
-    videoElement.currentTime = prevTime;
-    if (prevPaused) {
-      videoElement.pause();
-    }
-  };
 
   return new Promise<Blob>((resolve, reject) => {
     const hasRVFC = typeof videoElement.requestVideoFrameCallback === 'function';
 
     let animFrameId: number | null = null;
     let rvfcHandle: number | null = null;
+    let safetyTimer: ReturnType<typeof setTimeout> | null = null;
     let isFinished = false;
 
     const cancelScheduledFrame = () => {
       if (animFrameId !== null) {
-        cancelAnimationFrame(animFrameId);
+        if (typeof cancelAnimationFrame === 'function') {
+          cancelAnimationFrame(animFrameId);
+        } else {
+          clearTimeout(animFrameId);
+        }
         animFrameId = null;
       }
       if (rvfcHandle !== null && typeof videoElement.cancelVideoFrameCallback === 'function') {
         videoElement.cancelVideoFrameCallback(rvfcHandle);
         rvfcHandle = null;
       }
+      if (safetyTimer !== null) {
+        clearTimeout(safetyTimer);
+        safetyTimer = null;
+      }
     };
 
     const scheduleNextFrame = (cb: () => void) => {
       if (hasRVFC && typeof videoElement.requestVideoFrameCallback === 'function') {
         rvfcHandle = videoElement.requestVideoFrameCallback(() => cb());
-      } else {
+      } else if (typeof requestAnimationFrame === 'function') {
         animFrameId = requestAnimationFrame(() => cb());
+      } else {
+        animFrameId = setTimeout(() => cb(), 1000 / fps) as unknown as number;
+      }
+    };
+
+    const cleanup = () => {
+      if (isCleanedUp) return;
+      isCleanedUp = true;
+      cancelScheduledFrame();
+      videoElement.removeEventListener('ended', finishRecording);
+      videoElement.removeEventListener('timeupdate', onTimeUpdate);
+      combinedTracks.forEach((track) => track.stop());
+      canvasStream.getTracks().forEach((track) => track.stop());
+      videoElement.muted = prevMuted;
+      videoElement.volume = prevVolume;
+      videoElement.currentTime = prevTime;
+      if (prevPaused) {
+        videoElement.pause();
+      }
+    };
+
+    const finishRecording = () => {
+      if (isFinished) return;
+      isFinished = true;
+      cancelScheduledFrame();
+      videoElement.removeEventListener('ended', finishRecording);
+      videoElement.removeEventListener('timeupdate', onTimeUpdate);
+      videoElement.pause();
+      onProgress?.({ percent: 100, currentTime: totalDuration, totalTime: totalDuration });
+      if (recorder.state !== 'inactive') {
+        recorder.stop();
+      }
+    };
+
+    const onTimeUpdate = () => {
+      if (videoElement.currentTime >= totalDuration - 0.1 || videoElement.ended) {
+        finishRecording();
       }
     };
 
@@ -741,6 +774,8 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
       if (isFinished) return;
       isFinished = true;
       cancelScheduledFrame();
+      videoElement.removeEventListener('ended', finishRecording);
+      videoElement.removeEventListener('timeupdate', onTimeUpdate);
       if (recorder.state !== 'inactive') {
         recorder.stop();
       }
@@ -772,6 +807,10 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
       reject(new Error(`MediaRecorder error: ${String(e)}`));
     };
 
+    // Robust event listeners for natural video completion
+    videoElement.addEventListener('ended', finishRecording, { once: true });
+    videoElement.addEventListener('timeupdate', onTimeUpdate);
+
     const onSeekedInitial = async () => {
       if (signal?.aborted) {
         handleAbort();
@@ -787,14 +826,34 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
         return;
       }
 
-      // Mulai playback video
+      // Fallback safety timer: prevents infinite hang if browser drops frames or suspends RVFC
+      const safetyLimitMs = Math.max(3000, Math.round((totalDuration + 2.5) * 1000));
+      safetyTimer = setTimeout(() => {
+        if (!isFinished && !signal?.aborted) {
+          finishRecording();
+        }
+      }, safetyLimitMs);
+
+      // Mulai playback video (dengan fallback muting jika diblokir Autoplay Policy)
       try {
         await videoElement.play();
       } catch (err) {
-        recorder.stop();
-        cleanup();
-        reject(new Error(`Gagal memutar video untuk rendering: ${String(err)}`));
-        return;
+        if (err instanceof Error && err.name === 'NotAllowedError') {
+          try {
+            videoElement.muted = true;
+            await videoElement.play();
+          } catch (retryErr) {
+            recorder.stop();
+            cleanup();
+            reject(new Error(`Gagal memutar video untuk rendering: ${String(retryErr)}`));
+            return;
+          }
+        } else {
+          recorder.stop();
+          cleanup();
+          reject(new Error(`Gagal memutar video untuk rendering: ${String(err)}`));
+          return;
+        }
       }
 
       // Loop rendering frame demi frame dengan requestVideoFrameCallback / requestAnimationFrame
@@ -810,14 +869,8 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
         const percent = Math.min(100, Math.round((curTime / totalDuration) * 100));
         onProgress?.({ percent, currentTime: curTime, totalTime: totalDuration });
 
-        if (curTime >= totalDuration - 0.05 || videoElement.ended) {
-          isFinished = true;
-          cancelScheduledFrame();
-          videoElement.pause();
-          onProgress?.({ percent: 100, currentTime: totalDuration, totalTime: totalDuration });
-          if (recorder.state !== 'inactive') {
-            recorder.stop();
-          }
+        if (curTime >= totalDuration - 0.1 || videoElement.ended) {
+          finishRecording();
           return;
         }
 

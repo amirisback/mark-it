@@ -219,5 +219,126 @@ describe('Watermark Engine & Font Utilities', () => {
       expect(mimeCandidates[3]).toBe('video/mp4;codecs=avc1,mp4a');
       expect(mimeCandidates[4]).toBe('video/mp4');
     });
+
+    it('should complete video export cleanly when ended event fires', async () => {
+      const listeners: Record<string, ((e?: Event) => void)[]> = {};
+      const fakeVideo = {
+        videoWidth: 1280,
+        videoHeight: 720,
+        currentTime: 0,
+        duration: 2,
+        muted: false,
+        volume: 1,
+        paused: false,
+        play: () => Promise.resolve(),
+        pause: () => {},
+        addEventListener: (event: string, fn: (e?: Event) => void) => {
+          listeners[event] = listeners[event] || [];
+          listeners[event].push(fn);
+        },
+        removeEventListener: (event: string, fn: (e?: Event) => void) => {
+          if (listeners[event]) {
+            listeners[event] = listeners[event].filter((f) => f !== fn);
+          }
+        },
+        captureStream: () => ({
+          getAudioTracks: () => [],
+        }),
+      } as unknown as HTMLVideoElement;
+
+      const fakeCanvas = {
+        width: 1280,
+        height: 720,
+        getContext: () => ({
+          imageSmoothingEnabled: true,
+          imageSmoothingQuality: 'high',
+          clearRect: () => {},
+          drawImage: () => {},
+          save: () => {},
+          restore: () => {},
+          measureText: () => ({ width: 100 }),
+          fillText: () => {},
+          strokeText: () => {},
+          translate: () => {},
+          rotate: () => {},
+          fillRect: () => {},
+          strokeRect: () => {},
+          beginPath: () => {},
+          moveTo: () => {},
+          lineTo: () => {},
+          stroke: () => {},
+          fill: () => {},
+        }),
+        captureStream: () =>
+          ({
+            getVideoTracks: () => [{ stop: () => {} }],
+            getTracks: () => [{ stop: () => {} }],
+          } as unknown as MediaStream),
+      };
+
+      const origDoc = (globalThis as unknown as { document?: unknown }).document;
+      (globalThis as unknown as { document: unknown }).document = {
+        createElement: (tag: string) => {
+          if (tag === 'canvas') return fakeCanvas;
+          return {};
+        },
+        fonts: {
+          check: () => true,
+          load: async () => [],
+        },
+      };
+
+      class MockMediaStream {
+        tracks: unknown[];
+        constructor(tracks: unknown[] = []) {
+          this.tracks = tracks;
+        }
+        getTracks() {
+          return this.tracks;
+        }
+      }
+
+      class MockMediaRecorder {
+        static isTypeSupported = () => true;
+        state = 'recording';
+        ondataavailable: ((e: { data: Blob }) => void) | null = null;
+        onstop: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        start() {}
+        stop() {
+          this.state = 'inactive';
+          if (this.onstop) this.onstop();
+        }
+      }
+
+      const origMediaStream = (globalThis as unknown as { MediaStream?: unknown }).MediaStream;
+      const origMediaRecorder = (globalThis as unknown as { MediaRecorder?: unknown }).MediaRecorder;
+      (globalThis as unknown as { MediaStream?: unknown }).MediaStream = MockMediaStream;
+      (globalThis as unknown as { MediaRecorder?: unknown }).MediaRecorder = MockMediaRecorder;
+
+      try {
+        const exportPromise = exportWatermarkedVideoAsync({
+          videoElement: fakeVideo,
+          sourceWidth: 1280,
+          sourceHeight: 720,
+          duration: 2,
+          config: DEFAULT_WATERMARK_CONFIG,
+        });
+
+        setTimeout(() => {
+          if (listeners['ended']) {
+            listeners['ended'].forEach((fn) => fn());
+          }
+        }, 10);
+
+        const blob = await exportPromise;
+        expect(blob).toBeDefined();
+        expect(blob.type).toBe('video/webm;codecs=vp9,opus');
+      } finally {
+        (globalThis as unknown as { document?: unknown }).document = origDoc;
+        (globalThis as unknown as { MediaStream?: unknown }).MediaStream = origMediaStream;
+        (globalThis as unknown as { MediaRecorder?: unknown }).MediaRecorder = origMediaRecorder;
+      }
+    });
   });
 });
