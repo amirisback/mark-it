@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 
 const FAQ_ITEMS = [
   {
@@ -53,6 +53,7 @@ export function FaqSection() {
               >
                 <button
                   type="button"
+                  aria-expanded={isOpen}
                   onClick={() => setOpenIndex(isOpen ? null : idx)}
                   className="w-full flex items-center justify-between p-4 sm:p-5 text-left text-sm sm:text-base font-semibold text-foreground hover:bg-secondary/40 cursor-pointer transition-colors"
                 >

@@ -1,0 +1,125 @@
+======================================================================
+MARKIT STUDIO: TASK-003 UNIT TEST PROOF LOG
+Command: bun test
+Date: 2026-10-23
+======================================================================
+
+bun test v1.4.3 (c6da4a4d3)
+
+cli\index.test.ts:
+(pass) runCli > should show help when no command is provided
+(pass) runCli > should show help when --help flag is provided
+(pass) runCli > should call helloCommand when 'hello' command is provided
+(pass) runCli > should call helloCommand with name when -n flag is provided
+(pass) runCli > should show error and help for unknown command
+
+e2e\app.test.ts:
+(pass) E2E Application Workflow Test Suite > E2E Security & Proxy Middleware Gateways > should intercept and block path traversal / sensitive probe requests with HTTP 403
+(pass) E2E Application Workflow Test Suite > E2E Security & Proxy Middleware Gateways > should block automated vulnerability scanners with HTTP 403
+(pass) E2E Application Workflow Test Suite > E2E Security & Proxy Middleware Gateways > should allow legitimate traffic with rate limit tracking headers attached
+(pass) E2E Application Workflow Test Suite > E2E Security & Proxy Middleware Gateways > should throttle requests exceeding strict tier limit with HTTP 429
+(pass) E2E Application Workflow Test Suite > E2E Cryptographic Security Utilities > should execute encryption and decryption roundtrip cleanly
+(pass) E2E Application Workflow Test Suite > E2E Cryptographic Security Utilities > should safely return null on tampered ciphertext
+(pass) E2E Application Workflow Test Suite > E2E Cryptographic Security Utilities > should throw error on empty plaintext encryption
+(pass) E2E Application Workflow Test Suite > E2E ID Obfuscation (Sqids) > should execute obfuscate and deobfuscate roundtrip cleanly
+(pass) E2E Application Workflow Test Suite > E2E ID Obfuscation (Sqids) > should reject negative or invalid numbers
+(pass) E2E Application Workflow Test Suite > E2E ID Obfuscation (Sqids) > should return null on invalid hashes
+(pass) E2E Application Workflow Test Suite > E2E Next.js Core Routes & Metadata > should generate compliant PWA Web Manifest
+(pass) E2E Application Workflow Test Suite > E2E Next.js Core Routes & Metadata > should generate compliant robots.txt route structure
+(pass) E2E Application Workflow Test Suite > E2E Next.js Core Routes & Metadata > should generate compliant sitemap.xml entries
+(pass) E2E Application Workflow Test Suite > E2E Next.js Core Routes & Metadata > should generate comprehensive root layout metadata
+(pass) E2E Application Workflow Test Suite > E2E Watermark Studio Engine & Coordinate Pipeline > should calculate correct 9-grid coordinates for portrait and landscape media
+(pass) E2E Application Workflow Test Suite > E2E Watermark Studio Engine & Coordinate Pipeline > should compute linear font size in pixels and respect the 10px minimum boundary
+(pass) E2E Application Workflow Test Suite > E2E Watermark Studio Engine & Coordinate Pipeline > should sanitize font families and ensure multi-word font names are quoted for Canvas 2D
+(pass) E2E Application Workflow Test Suite > E2E Watermark Studio Engine & Coordinate Pipeline > should verify that all curated fonts have non-CSS variable definitions
+(pass) E2E Application Workflow Test Suite > E2E Watermark Studio Engine & Coordinate Pipeline > should safely reject video export immediately if AbortSignal is already triggered
+(pass) E2E Application Workflow Test Suite > E2E Watermark Studio Engine & Coordinate Pipeline > should reject exportCanvasToBlob when canvas dimensions are zero or invalid
+(pass) E2E Application Workflow Test Suite > E2E Watermark Studio Engine & Coordinate Pipeline > should render 9:16 (720x1280), 1:1 (1080x1080), 16:9 (1920x1080), and original canvases with frames and tiled logos
+(pass) E2E Application Workflow Test Suite > E2E Studio Workspace Presets & Batch Lifecycle Workflow > should verify that all presets have valid badge, description, and applicable configs
+(pass) E2E Application Workflow Test Suite > E2E Studio Workspace Presets & Batch Lifecycle Workflow > should verify correct batch queue activeIndex clamping logic on item removal
+(pass) E2E Application Workflow Test Suite > E2E Studio Dictionary & Localization Parity > should ensure identical structural parity for studio translations between id and en
+(pass) E2E Application Workflow Test Suite > E2E TASK-003 Code Audit & Bugfix Verification (AC-01 through AC-08) > AC-01: Switch single-trigger decoupled architecture & 44px hit-target
+(pass) E2E Application Workflow Test Suite > E2E TASK-003 Code Audit & Bugfix Verification (AC-01 through AC-08) > AC-02: Color picker hex normalizer & zero inline IIFE
+(pass) E2E Application Workflow Test Suite > E2E TASK-003 Code Audit & Bugfix Verification (AC-01 through AC-08) > AC-03: Video duration finite sanitizer & seek clamping
+(pass) E2E Application Workflow Test Suite > E2E TASK-003 Code Audit & Bugfix Verification (AC-01 through AC-08) > AC-04: Canvas viewer preview ratio badge parity
+(pass) E2E Application Workflow Test Suite > E2E TASK-003 Code Audit & Bugfix Verification (AC-01 through AC-08) > AC-05: Volume input full WAI-ARIA slider attributes
+(pass) E2E Application Workflow Test Suite > E2E TASK-003 Code Audit & Bugfix Verification (AC-01 through AC-08) > AC-06: Logo blob URL memory leak revocation on preset switch
+(pass) E2E Application Workflow Test Suite > E2E TASK-003 Code Audit & Bugfix Verification (AC-01 through AC-08) > AC-07: Total Duration finite protection in watermark engine
+(pass) E2E Application Workflow Test Suite > E2E TASK-003 Code Audit & Bugfix Verification (AC-01 through AC-08) > AC-08: Complete anti-slop zero em dash (—) compliance
+
+src\lib\__tests__\audit-enhancements.test.ts:
+(pass) TASK-003: Code Audit & Bug Fixes Verification > getSafeFiniteDuration > should return valid positive finite durations as-is
+(pass) TASK-003: Code Audit & Bug Fixes Verification > getSafeFiniteDuration > should fallback when duration is NaN, Infinity, negative, zero, or non-number
+(pass) TASK-003: Code Audit & Bug Fixes Verification > normalizeHexColor > should preserve valid 6-digit hex colors
+(pass) TASK-003: Code Audit & Bug Fixes Verification > normalizeHexColor > should expand 3-digit shorthand hex to 6-digit
+(pass) TASK-003: Code Audit & Bug Fixes Verification > normalizeHexColor > should fallback to default or specified color on invalid hex input
+(pass) TASK-003: Code Audit & Bug Fixes Verification > Sub-0.1s video seek clamp calculation > should clamp poster seek correctly for ultra-short media
+(pass) TASK-003: Code Audit & Bug Fixes Verification > Anti-Slop (Rule R-02): Zero Em Dash (—) in UI Copy & Metadata > should contain zero em dashes (\u2014) in audited files
+
+src\lib\__tests__\rate-limiter.test.ts:
+(pass) Rate Limiter Utility > getClientIp > should prioritize cf-connecting-ip
+(pass) Rate Limiter Utility > getClientIp > should extract first IP from x-forwarded-for if cf-connecting-ip is missing
+(pass) Rate Limiter Utility > getClientIp > should fallback to x-real-ip if previous headers are missing
+(pass) Rate Limiter Utility > getClientIp > should fallback to 127.0.0.1 if no IP headers are present
+(pass) Rate Limiter Utility > getRouteTier > should return strict tier for auth/sensitive endpoints
+(pass) Rate Limiter Utility > getRouteTier > should return moderate tier for API endpoints
+(pass) Rate Limiter Utility > getRouteTier > should return standard tier for general UI routes
+(pass) Rate Limiter Utility > checkRateLimit > should allow requests under the limit and decrement remaining
+(pass) Rate Limiter Utility > checkRateLimit > should track different identifiers independently
+(pass) Rate Limiter Utility > checkRateLimit > should evict oldest entry when tracked identifiers exceed 10,000 keys
+
+src\lib\__tests__\seo.test.ts:
+(pass) SEO Helpers & Metadata Generators > should have clean base URL without trailing slash
+(pass) SEO Helpers & Metadata Generators > should generate canonical URLs properly without double slashes
+(pass) SEO Helpers & Metadata Generators > should generate Open Graph metadata accurately
+(pass) SEO Helpers & Metadata Generators > should generate Twitter metadata accurately
+(pass) SEO Helpers & Metadata Generators > should generate valid JSON-LD objects for WebSite and Organization
+(pass) SEO Helpers & Metadata Generators > should construct full page SEO metadata with fallback defaults
+
+src\lib\__tests__\social-frame.test.ts:
+(pass) Social Media Safe Zone Frame & UI Mockup Overlays > should render null when frame is "none"
+(pass) Social Media Safe Zone Frame & UI Mockup Overlays > should render TikTok safe zone and interaction UI elements
+(pass) Social Media Safe Zone Frame & UI Mockup Overlays > should render Instagram Reels safe zone and UI elements
+(pass) Social Media Safe Zone Frame & UI Mockup Overlays > should render YouTube Shorts safe zone and UI elements
+(pass) Social Media Safe Zone Frame & UI Mockup Overlays > should omit danger zone masks when showDangerZone is false
+(pass) Social Media Safe Zone Frame & UI Mockup Overlays > should omit UI buttons when showUiElements is false
+(pass) Social Media Safe Zone Frame & UI Mockup Overlays > should apply custom opacity style
+(pass) Social Media Safe Zone Frame & UI Mockup Overlays > should include the social-safe-shortform preset in presets list
+(pass) Social Media Safe Zone Frame & UI Mockup Overlays > should calibrate canvas to 720 x 1280 px for social media content
+
+src\lib\__tests__\watermark-engine.test.ts:
+(pass) Watermark Engine & Font Utilities > computeFontSizePixels - Linear Sizing & Dimension Boundaries > should calculate exact linear font sizing without arbitrary multipliers
+(pass) Watermark Engine & Font Utilities > computeFontSizePixels - Linear Sizing & Dimension Boundaries > should enforce a minimum font size of 10px across low dimensions and zero/negative inputs
+(pass) Watermark Engine & Font Utilities > computeFontSizePixels - Linear Sizing & Dimension Boundaries > should scale predictably across extreme dimensions (400x300 thumbnail up to 8K)
+(pass) Watermark Engine & Font Utilities > resolveCanvasFontFamily - Sanitization & CSS Variable Rejection > should strip CSS variable strings and fallback to "Inter", sans-serif
+(pass) Watermark Engine & Font Utilities > resolveCanvasFontFamily - Sanitization & CSS Variable Rejection > should preserve valid concrete font family definitions
+(pass) Watermark Engine & Font Utilities > computeCoordinates - Full 9-Grid Position Matrix > should calculate top-left correctly
+(pass) Watermark Engine & Font Utilities > computeCoordinates - Full 9-Grid Position Matrix > should calculate top-center correctly
+(pass) Watermark Engine & Font Utilities > computeCoordinates - Full 9-Grid Position Matrix > should calculate top-right correctly
+(pass) Watermark Engine & Font Utilities > computeCoordinates - Full 9-Grid Position Matrix > should calculate middle-left correctly
+(pass) Watermark Engine & Font Utilities > computeCoordinates - Full 9-Grid Position Matrix > should calculate center correctly
+(pass) Watermark Engine & Font Utilities > computeCoordinates - Full 9-Grid Position Matrix > should calculate middle-right correctly
+(pass) Watermark Engine & Font Utilities > computeCoordinates - Full 9-Grid Position Matrix > should calculate bottom-left correctly
+(pass) Watermark Engine & Font Utilities > computeCoordinates - Full 9-Grid Position Matrix > should calculate bottom-center correctly
+(pass) Watermark Engine & Font Utilities > computeCoordinates - Full 9-Grid Position Matrix > should calculate bottom-right correctly
+(pass) Watermark Engine & Font Utilities > computeCoordinates - Full 9-Grid Position Matrix > should apply offset percentages accurately on both axes
+(pass) Watermark Engine & Font Utilities > Font Data & Presets Verification > should provide 10+ curated fonts across 5 categories
+(pass) Watermark Engine & Font Utilities > Font Data & Presets Verification > should provide 5 standard font size presets with linear percentage values
+(pass) Watermark Engine & Font Utilities > ensureFontLoadedAsync - Font Readiness Validator > should return true safely in non-browser/SSR environment or when document.fonts is absent
+(pass) Watermark Engine & Font Utilities > ensureFontLoadedAsync - Font Readiness Validator > should handle CSS variables and blank font strings gracefully
+(pass) Watermark Engine & Font Utilities > exportWatermarkedVideoAsync - AbortSignal & Edge Guards > should reject immediately with AbortError when signal is already aborted
+(pass) Watermark Engine & Font Utilities > exportWatermarkedVideoAsync - AbortSignal & Edge Guards > should verify codec candidates list includes WebM VP9/VP8 and MP4 AVC1
+(pass) Watermark Engine & Font Utilities > exportWatermarkedVideoAsync - AbortSignal & Edge Guards > should complete video export cleanly when ended event fires
+(pass) Watermark Engine & Font Utilities > exportWatermarkedVideoAsync - AbortSignal & Edge Guards > should enable canvas video track and compose audio stream properly
+(pass) Watermark Engine & Font Utilities > exportWatermarkedVideoAsync - AbortSignal & Edge Guards > should not prematurely cancel requestVideoFrameCallback on 24fps/30fps videos (~42ms frame time)
+(pass) Watermark Engine & Font Utilities > exportWatermarkedVideoAsync - AbortSignal & Edge Guards > should override zero-opacity and negative z-index on videoElement during rendering to prevent GPU decoder suspension
+(pass) Watermark Engine & Font Utilities > exportWatermarkedVideoAsync - AbortSignal & Edge Guards > should restore videoElement.style and stop media tracks if playback fails
+(pass) Watermark Engine & Font Utilities > drawWatermarkOnCanvas & drawWatermarkOnSocialCanvas - Frame & Safety Guards > should align banner fillRect height with exact bannerH (0.08 * sourceHeight) without overlapping source image
+(pass) Watermark Engine & Font Utilities > drawWatermarkOnCanvas & drawWatermarkOnSocialCanvas - Frame & Safety Guards > should render Polaroid card frame and metadata in drawWatermarkOnSocialCanvas
+(pass) Watermark Engine & Font Utilities > drawWatermarkOnCanvas & drawWatermarkOnSocialCanvas - Frame & Safety Guards > should guard against zero-width logo image and non-positive tileSpacing without throwing or hanging
+
+ 156 pass
+ 0 fail
+ 641 expect() calls
+Ran 156 tests across 14 files.
+Status: PASS (Exit code: 0)

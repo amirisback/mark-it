@@ -8,6 +8,7 @@ export interface SwitchProps {
   checked: boolean;
   onChange: (checked: boolean) => void;
   className?: string;
+  disabled?: boolean;
 }
 
 export function Switch({
@@ -16,29 +17,36 @@ export function Switch({
   checked,
   onChange,
   className = '',
+  disabled = false,
 }: SwitchProps) {
+  const switchId = React.useId();
+
   return (
     <div
-      onClick={() => onChange(!checked)}
-      className={`flex items-center justify-between gap-3 cursor-pointer select-none py-1.5 ${className}`}
+      className={`flex items-center justify-between gap-3 select-none py-1.5 ${
+        disabled ? 'opacity-50 pointer-events-none' : ''
+      } ${className}`}
     >
-      <div className="flex flex-col">
+      <label
+        htmlFor={switchId}
+        className="flex flex-col cursor-pointer flex-1 mr-2"
+      >
         <span className="text-xs font-medium text-foreground">{label}</span>
         {description ? (
           <span className="text-[11px] text-muted-foreground">{description}</span>
         ) : null}
-      </div>
+      </label>
+
       <button
+        id={switchId}
         type="button"
         role="switch"
         aria-checked={checked}
         aria-label={label}
-        onClick={(e) => {
-          e.stopPropagation();
-          onChange(!checked);
-        }}
-        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
-          checked ? 'bg-indigo-600' : 'bg-secondary'
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background before:absolute before:-inset-2 before:content-[''] ${
+          checked ? 'bg-indigo-600' : 'bg-secondary dark:bg-slate-700'
         }`}
       >
         <span

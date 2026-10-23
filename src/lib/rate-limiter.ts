@@ -18,18 +18,31 @@ const requestLogs = new Map<string, number[]>();
 // Periodic garbage collection every 5 minutes to prevent memory leaks
 let lastCleanup = Date.now();
 const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
+const MAX_TRACKED_KEYS = 10_000;
 
-function cleanupOldEntries(): void {
+function cleanupOldEntries(currentWindowMs = CLEANUP_INTERVAL_MS): void {
   const now = Date.now();
-  if (now - lastCleanup < CLEANUP_INTERVAL_MS) return;
+  const isOverCapacity = requestLogs.size >= MAX_TRACKED_KEYS;
+  if (!isOverCapacity && now - lastCleanup < CLEANUP_INTERVAL_MS) return;
   lastCleanup = now;
 
+  const retentionMs = Math.max(CLEANUP_INTERVAL_MS, currentWindowMs);
   for (const [key, timestamps] of requestLogs.entries()) {
-    const valid = timestamps.filter((t) => now - t < CLEANUP_INTERVAL_MS);
+    const valid = timestamps.filter((t) => now - t < retentionMs);
     if (valid.length === 0) {
       requestLogs.delete(key);
     } else {
       requestLogs.set(key, valid);
+    }
+  }
+
+  if (requestLogs.size >= MAX_TRACKED_KEYS) {
+    const excess = requestLogs.size - MAX_TRACKED_KEYS + 1;
+    let removed = 0;
+    for (const key of requestLogs.keys()) {
+      requestLogs.delete(key);
+      removed++;
+      if (removed >= excess) break;
     }
   }
 }
@@ -39,6 +52,7 @@ function cleanupOldEntries(): void {
  */
 export function resetRateLimitStore(): void {
   requestLogs.clear();
+  lastCleanup = Date.now();
 }
 
 /**
@@ -94,7 +108,7 @@ export function checkRateLimit(
   limit: number,
   windowMs: number
 ): RateLimitResult {
-  cleanupOldEntries();
+  cleanupOldEntries(windowMs);
 
   const now = Date.now();
   const windowStart = now - windowMs;
@@ -103,10 +117,10 @@ export function checkRateLimit(
   // Filter out timestamps outside the current sliding window
   const activeTimestamps = existingTimestamps.filter((t) => t > windowStart);
 
-  const resetTimestampSec = Math.ceil((now + windowMs) / 1000);
+  const oldestInWindow = activeTimestamps[0] ?? now;
+  const resetTimestampSec = Math.ceil((oldestInWindow + windowMs) / 1000);
 
   if (activeTimestamps.length >= limit) {
-    const oldestInWindow = activeTimestamps[0] ?? now;
     const retryAfterSec = Math.max(1, Math.ceil((oldestInWindow + windowMs - now) / 1000));
 
     requestLogs.set(identifier, activeTimestamps);

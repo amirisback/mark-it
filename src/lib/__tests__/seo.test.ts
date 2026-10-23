@@ -71,7 +71,7 @@ describe("SEO Helpers & Metadata Generators", () => {
       pathname: "/dashboard",
     });
 
-    expect(metadata.title).toBe(`Dashboard — ${seoConfig.siteName}`);
+    expect(metadata.title).toBe(`Dashboard | ${seoConfig.siteName}`);
     expect(metadata.description).toBe("User dashboard");
     expect(metadata.metadataBase).toBeInstanceOf(URL);
   });

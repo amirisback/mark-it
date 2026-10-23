@@ -41,28 +41,37 @@ export function StudioWorkspace() {
   const [progressText, setProgressText] = useState<string>('');
   const [videoProgress, setVideoProgress] = useState<VideoProgressInfo | null>(null);
   const [isDragOver, setIsDragOver] = useState<boolean>(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const currentCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const activeVideoElementRef = useRef<HTMLVideoElement | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const activeItem = items[activeIndex] || null;
 
   const itemsRef = useRef<MediaItem[]>([]);
+  const logoUrlRef = useRef<string | null>(config.logo.logoUrl);
 
   useEffect(() => {
     itemsRef.current = items;
   }, [items]);
 
-  // Cleanup object URLs strictly on unmount
+  useEffect(() => {
+    logoUrlRef.current = config.logo.logoUrl;
+  }, [config.logo.logoUrl]);
+
+  // Cleanup object URLs and active exports strictly on unmount
   useEffect(() => {
     return () => {
+      abortControllerRef.current?.abort();
       itemsRef.current.forEach((item) => {
         if (item.objectUrl.startsWith('blob:')) {
           URL.revokeObjectURL(item.objectUrl);
         }
       });
+      if (logoUrlRef.current?.startsWith('blob:')) {
+        URL.revokeObjectURL(logoUrlRef.current);
+      }
     };
   }, []);
 
@@ -114,25 +123,22 @@ export function StudioWorkspace() {
         }
       } else if (isVideo) {
         await new Promise<void>((resolve) => {
+          let settled = false;
           const tempVideo = document.createElement('video');
           tempVideo.preload = 'metadata';
-          tempVideo.onloadedmetadata = () => {
-            newItems.push({
-              id,
-              file,
-              name: file.name,
-              size: file.size,
-              type: 'video',
-              mimeType: file.type,
-              objectUrl,
-              width: tempVideo.videoWidth || 1280,
-              height: tempVideo.videoHeight || 720,
-              duration: tempVideo.duration || 0,
-              status: 'ready',
-            });
-            resolve();
+          const releaseTemp = () => {
+            tempVideo.onloadedmetadata = null;
+            tempVideo.onerror = null;
+            tempVideo.removeAttribute('src');
+            try {
+              tempVideo.load();
+            } catch {
+              // Ignore in mock environments
+            }
           };
-          tempVideo.onerror = () => {
+          const fallbackTimer = setTimeout(() => {
+            if (settled) return;
+            settled = true;
             newItems.push({
               id,
               file,
@@ -145,6 +151,50 @@ export function StudioWorkspace() {
               height: 720,
               status: 'ready',
             });
+            releaseTemp();
+            resolve();
+          }, 5000);
+
+          tempVideo.onloadedmetadata = () => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(fallbackTimer);
+            newItems.push({
+              id,
+              file,
+              name: file.name,
+              size: file.size,
+              type: 'video',
+              mimeType: file.type,
+              objectUrl,
+              width: tempVideo.videoWidth || 1280,
+              height: tempVideo.videoHeight || 720,
+              duration:
+                Number.isFinite(tempVideo.duration) && tempVideo.duration > 0
+                  ? tempVideo.duration
+                  : 0,
+              status: 'ready',
+            });
+            releaseTemp();
+            resolve();
+          };
+          tempVideo.onerror = () => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(fallbackTimer);
+            newItems.push({
+              id,
+              file,
+              name: file.name,
+              size: file.size,
+              type: 'video',
+              mimeType: file.type,
+              objectUrl,
+              width: 1280,
+              height: 720,
+              status: 'ready',
+            });
+            releaseTemp();
             resolve();
           };
           tempVideo.src = objectUrl;
@@ -162,28 +212,28 @@ export function StudioWorkspace() {
 
   // Remove single media with accurate active index clamping
   const handleRemoveItem = (id: string) => {
-    setItems((prev) => {
-      const removeIndex = prev.findIndex((item) => item.id === id);
-      if (removeIndex === -1) return prev;
+    if (isProcessing) return;
+    const removeIndex = items.findIndex((item) => item.id === id);
+    if (removeIndex === -1) return;
 
-      const item = prev[removeIndex];
-      if (item && item.objectUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(item.objectUrl);
-      }
+    const item = items[removeIndex];
+    if (item && item.objectUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(item.objectUrl);
+    }
 
-      const next = prev.filter((_, idx) => idx !== removeIndex);
-      setActiveIndex((curr) => {
-        if (next.length === 0) return 0;
-        if (removeIndex < curr) return curr - 1;
-        if (removeIndex === curr) return Math.min(curr, next.length - 1);
-        return curr;
-      });
-      return next;
+    const next = items.filter((_, idx) => idx !== removeIndex);
+    setItems(next);
+    setActiveIndex((curr) => {
+      if (next.length === 0) return 0;
+      if (removeIndex < curr) return curr - 1;
+      if (removeIndex === curr) return Math.min(curr, next.length - 1);
+      return curr;
     });
   };
 
   // Clear all media
   const handleClearAll = () => {
+    if (isProcessing) return;
     items.forEach((item) => {
       if (item.objectUrl.startsWith('blob:')) {
         URL.revokeObjectURL(item.objectUrl);
@@ -201,7 +251,9 @@ export function StudioWorkspace() {
 
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragOver(false);
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+      setIsDragOver(false);
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -213,14 +265,37 @@ export function StudioWorkspace() {
   };
 
   // Apply preset
-  const handleApplyPreset = (preset: WatermarkPreset) => {
-    setConfig((prev) => ({
-      ...prev,
-      text: preset.config.text ? { ...prev.text, ...preset.config.text } : prev.text,
-      logo: preset.config.logo ? { ...prev.logo, ...preset.config.logo } : prev.logo,
-      frame: preset.config.frame ? { ...prev.frame, ...preset.config.frame } : prev.frame,
-    }));
-  };
+  const handleApplyPreset = useCallback((preset: WatermarkPreset) => {
+    setConfig((prev) => {
+      if (
+        preset.config.logo &&
+        preset.config.logo.logoUrl !== prev.logo.logoUrl &&
+        prev.logo.logoUrl &&
+        prev.logo.logoUrl.startsWith('blob:')
+      ) {
+        URL.revokeObjectURL(prev.logo.logoUrl);
+      }
+      return {
+        ...prev,
+        text: preset.config.text ? { ...prev.text, ...preset.config.text } : prev.text,
+        logo: preset.config.logo ? { ...prev.logo, ...preset.config.logo } : prev.logo,
+        frame: preset.config.frame ? { ...prev.frame, ...preset.config.frame } : prev.frame,
+      };
+    });
+  }, []);
+
+  useEffect(() => {
+    const onExternalPreset = (e: Event) => {
+      const customEvent = e as CustomEvent<WatermarkPreset>;
+      if (customEvent.detail) {
+        handleApplyPreset(customEvent.detail);
+      }
+    };
+    window.addEventListener('markit:apply-preset', onExternalPreset);
+    return () => {
+      window.removeEventListener('markit:apply-preset', onExternalPreset);
+    };
+  }, [handleApplyPreset]);
 
   const formatSeconds = (secs: number): string => {
     const m = Math.floor(secs / 60);
@@ -241,6 +316,10 @@ export function StudioWorkspace() {
   // Download active file
   const handleDownloadActive = async () => {
     if (!activeItem) return;
+    if (activeVideoElementRef.current && !activeVideoElementRef.current.paused) {
+      activeVideoElementRef.current.pause();
+    }
+    setExportError(null);
     setIsProcessing(true);
     setProgressText('Menyiapkan file...');
     setVideoProgress(null);
@@ -357,7 +436,7 @@ export function StudioWorkspace() {
         console.log('Video export aborted by user');
       } else {
         console.error('Download active failed:', err);
-        alert(
+        setExportError(
           `Terjadi kesalahan saat mengekspor: ${err instanceof Error ? err.message : String(err)}`
         );
       }
@@ -372,6 +451,10 @@ export function StudioWorkspace() {
   // Download all files in batch sequentially
   const handleDownloadAll = async () => {
     if (items.length === 0) return;
+    if (activeVideoElementRef.current && !activeVideoElementRef.current.paused) {
+      activeVideoElementRef.current.pause();
+    }
+    setExportError(null);
     setIsProcessing(true);
     setProgressText(`Menyiapkan 1 dari ${items.length} file...`);
     setVideoProgress(null);
@@ -417,80 +500,202 @@ export function StudioWorkspace() {
               : '.webp';
           triggerFileDownload(blob, `${exportSettings.customPrefix}${cleanName}${extension}`);
         } else if (item.type === 'video') {
+          const batchVideoUrl = item.file ? URL.createObjectURL(item.file) : item.objectUrl;
+
           if (exportSettings.videoMode === 'single_frame') {
             setProgressText(`Menyimpan frame video ${i + 1}/${items.length}: ${item.name}`);
-            await new Promise<void>((resolve, reject) => {
-              const v = document.createElement('video');
-              if (!item.objectUrl.startsWith('blob:') && !item.objectUrl.startsWith('data:')) {
-                v.crossOrigin = 'anonymous';
+            const v = document.createElement('video');
+            if (!batchVideoUrl.startsWith('blob:') && !batchVideoUrl.startsWith('data:')) {
+              v.crossOrigin = 'anonymous';
+            }
+            v.preload = 'auto';
+            v.playsInline = true;
+            v.style.position = 'fixed';
+            v.style.bottom = '0px';
+            v.style.right = '0px';
+            v.style.width = '64px';
+            v.style.height = '64px';
+            v.style.opacity = '0.05';
+            v.style.pointerEvents = 'none';
+            v.style.zIndex = '50';
+            document.body.appendChild(v);
+
+            try {
+              await new Promise<void>((resolve, reject) => {
+                let isSettled = false;
+                const timeout = setTimeout(() => {
+                  if (!isSettled) {
+                    isSettled = true;
+                    reject(new Error(`Batas waktu (timeout) memuat frame video: ${item.name}`));
+                  }
+                }, 12000);
+
+                const onAbort = () => {
+                  if (!isSettled) {
+                    isSettled = true;
+                    clearTimeout(timeout);
+                    reject(new DOMException('Batch ekspor dibatalkan.', 'AbortError'));
+                  }
+                };
+                if (abortController.signal.aborted) {
+                  clearTimeout(timeout);
+                  reject(new DOMException('Batch ekspor dibatalkan.', 'AbortError'));
+                  return;
+                }
+                abortController.signal.addEventListener('abort', onAbort, { once: true });
+
+                v.onloadeddata = () => {
+                  if (isSettled) return;
+                  const dur = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : 1;
+                  const targetTime = Math.min(0.5, dur / 2);
+                  if (Math.abs(v.currentTime - targetTime) < 0.01) {
+                    v.dispatchEvent(new Event('seeked'));
+                  } else {
+                    v.currentTime = targetTime;
+                  }
+                };
+
+                v.onseeked = async () => {
+                  if (isSettled) return;
+                  try {
+                    const blob = await captureNativeVideoFrameAsync(
+                      v,
+                      config,
+                      logoImg,
+                      exportSettings.format,
+                      exportSettings.quality,
+                      v.videoWidth || item.width,
+                      v.videoHeight || item.height
+                    );
+                    const extension =
+                      exportSettings.format === 'image/png'
+                        ? '.png'
+                        : exportSettings.format === 'image/jpeg'
+                        ? '.jpg'
+                        : '.webp';
+                    triggerFileDownload(
+                      blob,
+                      `${exportSettings.customPrefix}${cleanName}_frame${extension}`
+                    );
+                    isSettled = true;
+                    clearTimeout(timeout);
+                    abortController.signal.removeEventListener('abort', onAbort);
+                    resolve();
+                  } catch (e) {
+                    isSettled = true;
+                    clearTimeout(timeout);
+                    abortController.signal.removeEventListener('abort', onAbort);
+                    reject(e);
+                  }
+                };
+
+                v.onerror = (e) => {
+                  if (isSettled) return;
+                  isSettled = true;
+                  clearTimeout(timeout);
+                  abortController.signal.removeEventListener('abort', onAbort);
+                  reject(new Error(`Gagal memuat video batch: ${String(e)}`));
+                };
+
+                v.src = batchVideoUrl;
+                v.load();
+              });
+            } finally {
+              v.pause();
+              v.removeAttribute('src');
+              v.load();
+              v.remove();
+              if (batchVideoUrl !== item.objectUrl && batchVideoUrl.startsWith('blob:')) {
+                URL.revokeObjectURL(batchVideoUrl);
               }
-              v.preload = 'auto';
-              v.onloadeddata = () => {
-                const targetTime = Math.min(0.5, (v.duration || 1) / 2);
-                if (Math.abs(v.currentTime - targetTime) < 0.01) {
-                  v.dispatchEvent(new Event('seeked'));
-                } else {
-                  v.currentTime = targetTime;
-                }
-              };
-              v.onseeked = async () => {
-                try {
-                  const blob = await captureNativeVideoFrameAsync(
-                    v,
-                    config,
-                    logoImg,
-                    exportSettings.format,
-                    exportSettings.quality,
-                    item.width,
-                    item.height
-                  );
-                  const extension =
-                    exportSettings.format === 'image/png'
-                      ? '.png'
-                      : exportSettings.format === 'image/jpeg'
-                      ? '.jpg'
-                      : '.webp';
-                  triggerFileDownload(
-                    blob,
-                    `${exportSettings.customPrefix}${cleanName}_frame${extension}`
-                  );
-                  resolve();
-                } catch (e) {
-                  reject(e);
-                }
-              };
-              v.onerror = (e) => reject(new Error(`Gagal memuat video batch: ${String(e)}`));
-              v.src = item.objectUrl;
-            });
+            }
           } else {
             // Full video export for batch
             setProgressText(`Merender video ${i + 1}/${items.length}: ${item.name}`);
             const tempVideo = document.createElement('video');
-            if (!item.objectUrl.startsWith('blob:') && !item.objectUrl.startsWith('data:')) {
+            if (!batchVideoUrl.startsWith('blob:') && !batchVideoUrl.startsWith('data:')) {
               tempVideo.crossOrigin = 'anonymous';
             }
+            tempVideo.preload = 'auto';
             tempVideo.playsInline = true;
             tempVideo.style.position = 'fixed';
-            tempVideo.style.top = '-9999px';
-            tempVideo.style.left = '-9999px';
-            tempVideo.style.width = '1px';
-            tempVideo.style.height = '1px';
-            tempVideo.style.opacity = '0';
+            tempVideo.style.bottom = '0px';
+            tempVideo.style.right = '0px';
+            tempVideo.style.width = '64px';
+            tempVideo.style.height = '64px';
+            tempVideo.style.opacity = '0.05';
             tempVideo.style.pointerEvents = 'none';
+            tempVideo.style.zIndex = '50';
             document.body.appendChild(tempVideo);
 
             try {
               await new Promise<void>((resolve, reject) => {
-                tempVideo.onloadedmetadata = () => resolve();
-                tempVideo.onerror = (e) =>
-                  reject(new Error(`Gagal memuat metadata video: ${String(e)}`));
-                tempVideo.src = item.objectUrl;
+                let isSettled = false;
+                const timeout = setTimeout(() => {
+                  if (!isSettled) {
+                    isSettled = true;
+                    reject(new Error(`Batas waktu (timeout) memuat data video: ${item.name}`));
+                  }
+                }, 12000);
+
+                const finishReady = () => {
+                  if (isSettled) return;
+                  isSettled = true;
+                  clearTimeout(timeout);
+                  abortController.signal.removeEventListener('abort', onAbort);
+                  resolve();
+                };
+
+                const onAbort = () => {
+                  if (!isSettled) {
+                    isSettled = true;
+                    clearTimeout(timeout);
+                    reject(new DOMException('Batch ekspor dibatalkan.', 'AbortError'));
+                  }
+                };
+                if (abortController.signal.aborted) {
+                  clearTimeout(timeout);
+                  reject(new DOMException('Batch ekspor dibatalkan.', 'AbortError'));
+                  return;
+                }
+                abortController.signal.addEventListener('abort', onAbort, { once: true });
+
+                // Tunggu hingga data frame video siap (loadeddata) lalu lakukan prime seek singkat
+                // agar hardware video decoder mem-buffer frame ke GPU sebelum perekaman dimulai
+                tempVideo.onloadeddata = () => {
+                  if (isSettled) return;
+                  const dur =
+                    Number.isFinite(tempVideo.duration) && tempVideo.duration > 0
+                      ? tempVideo.duration
+                      : 1;
+                  const primeTime = Math.min(0.05, dur * 0.1);
+                  if (primeTime > 0) {
+                    const seekFallback = setTimeout(finishReady, 800);
+                    tempVideo.onseeked = () => {
+                      clearTimeout(seekFallback);
+                      tempVideo.onseeked = null;
+                      finishReady();
+                    };
+                    tempVideo.currentTime = primeTime;
+                  } else {
+                    finishReady();
+                  }
+                };
+                tempVideo.onerror = (e) => {
+                  if (isSettled) return;
+                  isSettled = true;
+                  clearTimeout(timeout);
+                  abortController.signal.removeEventListener('abort', onAbort);
+                  reject(new Error(`Gagal memuat data video: ${String(e)}`));
+                };
+                tempVideo.src = batchVideoUrl;
+                tempVideo.load();
               });
 
               const blob = await exportWatermarkedVideoAsync({
                 videoElement: tempVideo,
-                sourceWidth: item.width,
-                sourceHeight: item.height,
+                sourceWidth: tempVideo.videoWidth || item.width,
+                sourceHeight: tempVideo.videoHeight || item.height,
                 duration: item.duration || tempVideo.duration || 0,
                 config,
                 logoImg,
@@ -526,7 +731,13 @@ export function StudioWorkspace() {
                   : '.webm';
               triggerFileDownload(blob, `${exportSettings.customPrefix}${cleanName}${ext}`);
             } finally {
+              tempVideo.pause();
+              tempVideo.removeAttribute('src');
+              tempVideo.load();
               tempVideo.remove();
+              if (batchVideoUrl !== item.objectUrl && batchVideoUrl.startsWith('blob:')) {
+                URL.revokeObjectURL(batchVideoUrl);
+              }
             }
           }
         }
@@ -539,7 +750,7 @@ export function StudioWorkspace() {
         console.log('Batch export aborted');
       } else {
         console.error('Download all failed:', err);
-        alert(
+        setExportError(
           `Terjadi kesalahan saat batch ekspor: ${err instanceof Error ? err.message : String(err)}`
         );
       }
@@ -630,15 +841,6 @@ export function StudioWorkspace() {
     [handleAddFiles, socialFrame]
   );
 
-  // Auto-initialize 720 × 1280 px vertical social media sample on first load
-  const hasAutoLoadedSampleRef = useRef<boolean>(false);
-  useEffect(() => {
-    if (!hasAutoLoadedSampleRef.current && items.length === 0) {
-      hasAutoLoadedSampleRef.current = true;
-      loadSampleImage('vertical');
-    }
-  }, [items.length, loadSampleImage]);
-
   return (
     <section
       id="studio"
@@ -699,12 +901,33 @@ export function StudioWorkspace() {
             multiple
             accept="image/png,image/jpeg,image/webp,image/svg+xml,video/mp4,video/webm"
             onChange={(e) => {
-              if (e.target.files) handleAddFiles(e.target.files);
+              if (e.target.files) {
+                handleAddFiles(e.target.files);
+              }
+              e.target.value = '';
             }}
             className="hidden"
           />
         </div>
       </div>
+
+      {/* Dismissible Export Error Banner */}
+      {exportError ? (
+        <div
+          role="alert"
+          className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-destructive/10 border border-destructive/30 text-destructive text-xs sm:text-sm"
+        >
+          <span className="font-medium">{exportError}</span>
+          <button
+            type="button"
+            onClick={() => setExportError(null)}
+            aria-label="Tutup pesan kesalahan"
+            className="px-2 py-1 rounded-md hover:bg-destructive/20 font-semibold cursor-pointer shrink-0"
+          >
+            Tutup
+          </button>
+        </div>
+      ) : null}
 
       {/* Drag & Drop Overlay Indicator */}
       {isDragOver ? (
@@ -737,6 +960,7 @@ export function StudioWorkspace() {
         onRemove={handleRemoveItem}
         onClearAll={handleClearAll}
         onAddFilesClick={() => fileInputRef.current?.click()}
+        disabled={isProcessing}
       />
 
       {/* Main Studio Workspace: Left = Live Canvas, Right = Inspector Settings */}
@@ -748,13 +972,11 @@ export function StudioWorkspace() {
             config={config}
             socialFrame={socialFrame}
             onSocialFrameChange={setSocialFrame}
-            onCanvasReady={(cvs) => {
-              currentCanvasRef.current = cvs;
-            }}
             onVideoElementReady={(v) => {
               activeVideoElementRef.current = v;
             }}
             onLoadSampleClick={() => loadSampleImage('vertical')}
+            isProcessing={isProcessing}
           />
         </div>
 

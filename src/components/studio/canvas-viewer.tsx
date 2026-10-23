@@ -6,7 +6,6 @@ import {
   drawWatermarkOnCanvas,
   drawWatermarkOnSocialCanvas,
   loadImageAsync,
-  applyPristineCanvasSmoothing,
 } from '@/lib/watermark-engine';
 import { Button } from '@/components/ui/button';
 import { SocialFrameOverlay } from './social-frame-overlay';
@@ -19,6 +18,7 @@ export interface CanvasViewerProps {
   onCanvasReady?: (canvas: HTMLCanvasElement) => void;
   onVideoElementReady?: (video: HTMLVideoElement | null) => void;
   onLoadSampleClick?: () => void;
+  isProcessing?: boolean;
 }
 
 export function CanvasViewer({
@@ -29,6 +29,7 @@ export function CanvasViewer({
   onCanvasReady,
   onVideoElementReady,
   onLoadSampleClick,
+  isProcessing = false,
 }: CanvasViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -56,6 +57,8 @@ export function CanvasViewer({
   const [showUiMockup, setShowUiMockup] = useState<boolean>(true);
   const [overlayOpacity, setOverlayOpacity] = useState<number>(0.85);
 
+  const cachedMediaImageRef = useRef<{ url: string; img: HTMLImageElement } | null>(null);
+
   // Load logo asynchronously when url changes
   useEffect(() => {
     let isCancelled = false;
@@ -80,71 +83,91 @@ export function CanvasViewer({
 
   const logoImageElement = config.logo.enabled && config.logo.logoUrl ? rawLogoImg : null;
 
-  // Render loop for static image
+  const drawSourceByPreviewRatio = useCallback(
+    (
+      canvas: HTMLCanvasElement,
+      source: HTMLImageElement | HTMLVideoElement,
+      sourceWidth: number,
+      sourceHeight: number
+    ) => {
+      const effectiveConfig: WatermarkFullConfig = showOriginal
+        ? {
+            ...config,
+            text: { ...config.text, enabled: false },
+            logo: { ...config.logo, enabled: false },
+            frame: { ...config.frame, enabled: false },
+          }
+        : config;
+
+      if (previewRatio === '9:16') {
+        drawWatermarkOnSocialCanvas(
+          canvas,
+          source,
+          sourceWidth,
+          sourceHeight,
+          effectiveConfig,
+          logoImageElement,
+          720,
+          1280
+        );
+      } else if (previewRatio === '1:1') {
+        drawWatermarkOnSocialCanvas(
+          canvas,
+          source,
+          sourceWidth,
+          sourceHeight,
+          effectiveConfig,
+          logoImageElement,
+          1080,
+          1080
+        );
+      } else if (previewRatio === '16:9') {
+        drawWatermarkOnSocialCanvas(
+          canvas,
+          source,
+          sourceWidth,
+          sourceHeight,
+          effectiveConfig,
+          logoImageElement,
+          1920,
+          1080
+        );
+      } else {
+        drawWatermarkOnCanvas(
+          canvas,
+          source,
+          sourceWidth,
+          sourceHeight,
+          effectiveConfig,
+          logoImageElement
+        );
+      }
+    },
+    [config, logoImageElement, showOriginal, previewRatio]
+  );
+
+  // Render loop for static image with cached image decode
   const renderImage = useCallback(
     async (item: MediaItem) => {
       const canvas = canvasRef.current;
       if (!canvas) return;
 
       try {
-        const img = await loadImageAsync(item.objectUrl);
-        if (previewRatio === '9:16') {
-          if (showOriginal) {
-            canvas.width = 720;
-            canvas.height = 1280;
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-              applyPristineCanvasSmoothing(ctx);
-              ctx.clearRect(0, 0, 720, 1280);
-              const sourceAspect = img.width / img.height;
-              if (Math.abs(sourceAspect - 720 / 1280) < 0.02) {
-                ctx.drawImage(img, 0, 0, 720, 1280);
-              } else {
-                ctx.save();
-                const coverScale = Math.max(720 / img.width, 1280 / img.height);
-                const bgW = img.width * coverScale;
-                const bgH = img.height * coverScale;
-                ctx.filter = 'blur(28px) brightness(0.4)';
-                ctx.drawImage(img, (720 - bgW) / 2, (1280 - bgH) / 2, bgW, bgH);
-                ctx.restore();
-
-                const fitScale = Math.min(720 / img.width, 1280 / img.height);
-                const drawW = Math.round(img.width * fitScale);
-                const drawH = Math.round(img.height * fitScale);
-                ctx.drawImage(img, (720 - drawW) / 2, (1280 - drawH) / 2, drawW, drawH);
-              }
-            }
-          } else {
-            drawWatermarkOnSocialCanvas(
-              canvas,
-              img,
-              img.width,
-              img.height,
-              config,
-              logoImageElement,
-              720,
-              1280
-            );
-          }
+        let img: HTMLImageElement;
+        if (cachedMediaImageRef.current && cachedMediaImageRef.current.url === item.objectUrl) {
+          img = cachedMediaImageRef.current.img;
         } else {
-          if (showOriginal) {
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-              canvas.width = img.width;
-              canvas.height = img.height;
-              applyPristineCanvasSmoothing(ctx);
-              ctx.drawImage(img, 0, 0);
-            }
-          } else {
-            drawWatermarkOnCanvas(canvas, img, img.width, img.height, config, logoImageElement);
-          }
+          img = await loadImageAsync(item.objectUrl);
+          cachedMediaImageRef.current = { url: item.objectUrl, img };
         }
+
+        drawSourceByPreviewRatio(canvas, img, img.width, img.height);
         if (onCanvasReady) onCanvasReady(canvas);
       } catch (err) {
         console.error('Error rendering image to canvas:', err);
       }
     },
-    [config, logoImageElement, showOriginal, previewRatio, onCanvasReady]
+    [drawSourceByPreviewRatio, onCanvasReady]
   );
 
   // Render frame for video
@@ -156,64 +179,14 @@ export function CanvasViewer({
     const width = video.videoWidth || 640;
     const height = video.videoHeight || 360;
 
-    if (previewRatio === '9:16') {
-      if (showOriginal) {
-        canvas.width = 720;
-        canvas.height = 1280;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          applyPristineCanvasSmoothing(ctx);
-          ctx.clearRect(0, 0, 720, 1280);
-          const sourceAspect = width / height;
-          if (Math.abs(sourceAspect - 720 / 1280) < 0.02) {
-            ctx.drawImage(video, 0, 0, 720, 1280);
-          } else {
-            ctx.save();
-            const coverScale = Math.max(720 / width, 1280 / height);
-            const bgW = width * coverScale;
-            const bgH = height * coverScale;
-            ctx.filter = 'blur(28px) brightness(0.4)';
-            ctx.drawImage(video, (720 - bgW) / 2, (1280 - bgH) / 2, bgW, bgH);
-            ctx.restore();
-
-            const fitScale = Math.min(720 / width, 1280 / height);
-            const drawW = Math.round(width * fitScale);
-            const drawH = Math.round(height * fitScale);
-            ctx.drawImage(video, (720 - drawW) / 2, (1280 - drawH) / 2, drawW, drawH);
-          }
-        }
-      } else {
-        drawWatermarkOnSocialCanvas(
-          canvas,
-          video,
-          width,
-          height,
-          config,
-          logoImageElement,
-          720,
-          1280
-        );
-      }
-    } else {
-      if (showOriginal) {
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          canvas.width = width;
-          canvas.height = height;
-          applyPristineCanvasSmoothing(ctx);
-          ctx.drawImage(video, 0, 0, width, height);
-        }
-      } else {
-        drawWatermarkOnCanvas(canvas, video, width, height, config, logoImageElement);
-      }
-    }
+    drawSourceByPreviewRatio(canvas, video, width, height);
 
     if (onCanvasReady) onCanvasReady(canvas);
-  }, [config, logoImageElement, showOriginal, previewRatio, onCanvasReady]);
+  }, [drawSourceByPreviewRatio, onCanvasReady]);
 
-  // Continuous animation frame loop during video playback
+  // Continuous animation frame loop during video playback (dimatikan saat export agar tidak membebani GPU/CPU)
   useEffect(() => {
-    if (activeItem?.type === 'video' && isPlayingVideo) {
+    if (activeItem?.type === 'video' && isPlayingVideo && !isProcessing) {
       const loop = () => {
         renderVideoFrame();
         if (videoRef.current) {
@@ -232,12 +205,14 @@ export function CanvasViewer({
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [activeItem?.type, isPlayingVideo, renderVideoFrame]);
+  }, [activeItem?.type, isPlayingVideo, isProcessing, renderVideoFrame]);
 
   // Trigger render when active item or config changes, pausing and cleaning previous media
   const prevItemIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!activeItem) {
+      prevItemIdRef.current = null;
+      cachedMediaImageRef.current = null;
       if (videoRef.current && !videoRef.current.paused) {
         videoRef.current.pause();
       }
@@ -246,6 +221,7 @@ export function CanvasViewer({
 
     if (prevItemIdRef.current !== activeItem.id) {
       prevItemIdRef.current = activeItem.id;
+      cachedMediaImageRef.current = null;
       if (videoRef.current) {
         if (!videoRef.current.paused) {
           videoRef.current.pause();
@@ -260,6 +236,14 @@ export function CanvasViewer({
       const video = videoRef.current;
       if (video) {
         if (video.src !== activeItem.objectUrl) {
+          if (
+            !activeItem.objectUrl.startsWith('blob:') &&
+            !activeItem.objectUrl.startsWith('data:')
+          ) {
+            video.crossOrigin = 'anonymous';
+          } else {
+            video.removeAttribute('crossorigin');
+          }
           video.src = activeItem.objectUrl;
           video.load();
         } else {
@@ -282,8 +266,11 @@ export function CanvasViewer({
   const handleLoadedVideoMetadata = () => {
     const video = videoRef.current;
     if (video) {
-      setVideoDuration(video.duration || 0);
-      video.currentTime = 0.1; // Seek slightly forward to grab poster frame
+      video.volume = volume / 100;
+      const safeDuration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
+      setVideoDuration(safeDuration);
+      setVideoCurrentTime(0);
+      video.currentTime = Math.min(0.1, safeDuration > 0 ? safeDuration / 2 : 0); // Seek slightly forward to grab poster frame
     }
   };
 
@@ -409,6 +396,7 @@ export function CanvasViewer({
   ]);
 
   const formatTime = (secs: number): string => {
+    if (!Number.isFinite(secs) || secs < 0) return '0:00';
     const m = Math.floor(secs / 60);
     const s = Math.floor(secs % 60);
     return `${m}:${s < 10 ? '0' : ''}${s}`;
@@ -425,34 +413,34 @@ export function CanvasViewer({
               Pratinjau Studio
             </span>
             <span className="text-xs text-muted-foreground/60 font-mono">:</span>
-            <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 font-mono bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
+            <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 font-mono bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 tabular-nums">
               {previewRatio === '9:16'
                 ? '720 × 1280 px'
                 : previewRatio === '1:1'
-                ? activeItem
-                  ? `${Math.min(activeItem.width, activeItem.height)} × ${Math.min(activeItem.width, activeItem.height)} px`
-                  : '1080 × 1080 px'
+                ? '1080 × 1080 px'
                 : previewRatio === '16:9'
-                ? activeItem
-                  ? `${activeItem.width} × ${Math.round((activeItem.width * 9) / 16)} px`
-                  : '1920 × 1080 px'
+                ? '1920 × 1080 px'
                 : activeItem
                 ? `${activeItem.width} × ${activeItem.height} px`
                 : '720 × 1280 px'}
             </span>
           </div>
 
-          {previewRatio === '9:16' ? (
+          {previewRatio !== 'original' ? (
             <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
-              Disesuaikan dengan content sosmed
+              Disesuaikan dengan format sosmed
             </span>
           ) : null}
 
-          {activeItem && previewRatio === '9:16' && (activeItem.width !== 720 || activeItem.height !== 1280) ? (
+          {activeItem &&
+          previewRatio !== 'original' &&
+          ((previewRatio === '9:16' && (activeItem.width !== 720 || activeItem.height !== 1280)) ||
+            (previewRatio === '1:1' && (activeItem.width !== 1080 || activeItem.height !== 1080)) ||
+            (previewRatio === '16:9' && (activeItem.width !== 1920 || activeItem.height !== 1080))) ? (
             <span
-              className="text-[10px] font-mono text-muted-foreground bg-secondary/80 px-2 py-0.5 rounded border border-border/50 hidden sm:inline-block"
-              title="Dimensi asli media sebelum disesuaikan ke format sosmed 720 × 1280 px"
+              className="text-[10px] font-mono text-muted-foreground bg-secondary/80 px-2 py-0.5 rounded border border-border/50 hidden sm:inline-block tabular-nums"
+              title={`Dimensi asli media sebelum disesuaikan ke format ${previewRatio}`}
             >
               Media Asli: {activeItem.width} × {activeItem.height} px
             </span>
@@ -691,18 +679,35 @@ export function CanvasViewer({
           zoomLevel > 100 ? 'overflow-auto' : 'overflow-hidden'
         } canvas-checkerboard flex items-center justify-center p-3 sm:p-4`}
       >
-        {/* Hidden video decoder element */}
+        {/* Active offscreen video decoder element (kept at opacity >= 0.05 & 64x64px to prevent Chromium compositor occlusion culling) */}
         <video
           ref={videoRef}
-          crossOrigin="anonymous"
+          preload="auto"
           playsInline
           muted={isMuted}
-          className="hidden"
+          className="pointer-events-none select-none"
+          style={{
+            position: 'fixed',
+            bottom: 0,
+            right: 0,
+            width: '64px',
+            height: '64px',
+            opacity: 0.05,
+            zIndex: 50,
+            pointerEvents: 'none',
+          }}
+          aria-hidden="true"
+          tabIndex={-1}
           onLoadedMetadata={handleLoadedVideoMetadata}
+          onLoadedData={renderVideoFrame}
           onSeeked={handleVideoSeeked}
           onEnded={() => setIsPlayingVideo(false)}
           onPause={() => setIsPlayingVideo(false)}
-          onPlay={() => setIsPlayingVideo(true)}
+          onPlay={() => {
+            if (!isProcessing) {
+              setIsPlayingVideo(true);
+            }
+          }}
         />
 
         {activeItem ? (
@@ -908,13 +913,23 @@ export function CanvasViewer({
 
             <input
               type="range"
+              role="slider"
               min={0}
               max={100}
               step={1}
               value={isMuted ? 0 : volume}
               onChange={(e) => handleVolumeChange(parseInt(e.target.value, 10))}
               aria-label="Volume audio video"
-              className="w-14 sm:w-16 h-1 bg-secondary rounded-lg appearance-none cursor-pointer accent-indigo-600"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={isMuted ? 0 : volume}
+              aria-valuetext={`${isMuted ? 0 : volume} persen`}
+              className="w-14 sm:w-16 h-1.5 bg-secondary dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+              style={{
+                background: `linear-gradient(to right, #4f46e5 ${isMuted ? 0 : volume}%, var(--secondary) ${
+                  isMuted ? 0 : volume
+                }%)`,
+              }}
             />
           </div>
         </div>

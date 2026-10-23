@@ -1,4 +1,4 @@
-export function helloCommand(name?: string) {
+export function helloCommand(name?: string): string {
   const targetName = name || "World";
   console.log(`Hello, ${targetName}! Welcome to Amir App CLI.`);
   return `Hello, ${targetName}! Welcome to Amir App CLI.`;

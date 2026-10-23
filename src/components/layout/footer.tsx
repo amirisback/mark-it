@@ -1,4 +1,3 @@
-import React from 'react';
 import { FOOTER_LINKS } from '@/data/navigation';
 
 export interface FooterProps {

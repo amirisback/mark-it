@@ -57,7 +57,9 @@ export function encrypt(text: string): string {
       .replace(/\//g, "_")
       .replace(/=+$/, "");
   } catch (error) {
-    console.error("[Encryption Error]:", error);
+    if (process.env.NODE_ENV !== "test") {
+      console.error("[Encryption Error]:", error);
+    }
     throw new Error("Failed to encrypt the provided data.");
   }
 }
@@ -74,10 +76,9 @@ export function decrypt(encryptedText: string): string | null {
 
   try {
     // Restore standard Base64 padding and characters
-    let base64 = encryptedText.replace(/-/g, "+").replace(/_/g, "/");
-    while (base64.length % 4) {
-      base64 += "=";
-    }
+    const base64Raw = encryptedText.replace(/-/g, "+").replace(/_/g, "/");
+    const padLength = (4 - (base64Raw.length % 4)) % 4;
+    const base64 = base64Raw + "=".repeat(padLength);
 
     const combinedBuffer = Buffer.from(base64, "base64");
 

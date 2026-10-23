@@ -2,7 +2,7 @@ import type { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'MarkIt Studio — Photo & Video Watermark',
+    name: 'MarkIt Studio: Photo & Video Watermark',
     short_name: 'MarkIt',
     description: 'Beri watermark teks, logo transparan, atau bingkai pada foto dan video secara instan dalam batch.',
     start_url: '/',

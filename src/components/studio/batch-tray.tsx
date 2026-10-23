@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import Image from 'next/image';
 import type { MediaItem } from '@/types/watermark';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +11,7 @@ export interface BatchTrayProps {
   onRemove: (id: string) => void;
   onClearAll: () => void;
   onAddFilesClick: () => void;
+  disabled?: boolean;
 }
 
 export function BatchTray({
@@ -21,6 +21,7 @@ export function BatchTray({
   onRemove,
   onClearAll,
   onAddFilesClick,
+  disabled = false,
 }: BatchTrayProps) {
   const formatFileSize = (bytes: number): string => {
     if (bytes < 1024) return `${bytes} B`;
@@ -43,16 +44,18 @@ export function BatchTray({
         <div className="flex items-center gap-2">
           <button
             type="button"
+            disabled={disabled}
             onClick={onAddFilesClick}
-            className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer flex items-center gap-1"
+            className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer disabled:opacity-50 disabled:pointer-events-none flex items-center gap-1"
           >
             <span className="text-base font-bold leading-none">+</span> Tambah Media
           </button>
           {items.length > 0 ? (
             <button
               type="button"
+              disabled={disabled}
               onClick={onClearAll}
-              className="text-xs text-muted-foreground hover:text-destructive cursor-pointer transition-colors"
+              className="text-xs text-muted-foreground hover:text-destructive cursor-pointer disabled:opacity-50 disabled:pointer-events-none transition-colors"
             >
               Hapus Semua
             </button>
@@ -153,11 +156,13 @@ export function BatchTray({
 
                   <button
                     type="button"
+                    disabled={disabled}
+                    aria-label={`Hapus ${item.name}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       onRemove(item.id);
                     }}
-                    className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-destructive transition-opacity"
+                    className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100 p-1 text-muted-foreground hover:text-destructive disabled:opacity-30 disabled:pointer-events-none transition-opacity"
                     title="Hapus media"
                   >
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

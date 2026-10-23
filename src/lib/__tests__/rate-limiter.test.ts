@@ -101,5 +101,20 @@ describe("Rate Limiter Utility", () => {
       expect(res2.success).toBe(true);
       expect(res2.remaining).toBe(1);
     });
+
+    it("should evict oldest entry when tracked identifiers exceed 10,000 keys", () => {
+      checkRateLimit("oldest-ip", 1, 60000);
+      // Exhaust oldest-ip
+      expect(checkRateLimit("oldest-ip", 1, 60000).success).toBe(false);
+
+      for (let i = 0; i < 10000; i++) {
+        checkRateLimit(`flood-ip-${i}`, 5, 60000);
+      }
+
+      // oldest-ip was evicted, so it gets a fresh quota
+      const afterEviction = checkRateLimit("oldest-ip", 1, 60000);
+      expect(afterEviction.success).toBe(true);
+      expect(afterEviction.remaining).toBe(0);
+    });
   });
 });

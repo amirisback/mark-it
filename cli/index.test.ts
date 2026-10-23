@@ -3,15 +3,17 @@ import { runCli } from "./index";
 import * as helloModule from "./commands/hello";
 
 describe("runCli", () => {
-  let consoleLogSpy: any;
-  let consoleErrorSpy: any;
-  let processExitSpy: any;
-  let helloCommandSpy: any;
+  let consoleLogSpy: ReturnType<typeof vi.spyOn>;
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
+  let processExitSpy: ReturnType<typeof vi.spyOn>;
+  let helloCommandSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    processExitSpy = vi.spyOn(process, "exit").mockImplementation((() => {}) as any);
+    processExitSpy = vi
+      .spyOn(process, "exit")
+      .mockImplementation((() => undefined as never) as unknown as (code?: string | number | null) => never);
     helloCommandSpy = vi.spyOn(helloModule, "helloCommand").mockImplementation(() => "mocked");
   });
 

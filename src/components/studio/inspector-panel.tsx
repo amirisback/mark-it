@@ -103,10 +103,11 @@ export function InspectorPanel({
       logoUrl: url,
       fileName: file.name,
     });
+    e.target.value = '';
   };
 
   const removeLogo = () => {
-    if (config.logo.logoUrl) {
+    if (config.logo.logoUrl && config.logo.logoUrl.startsWith('blob:')) {
       URL.revokeObjectURL(config.logo.logoUrl);
     }
     updateLogo({
@@ -209,6 +210,7 @@ export function InspectorPanel({
 
                   <div className="relative">
                     <select
+                      aria-label="Jenis Font Watermark"
                       value={config.text.fontFamily}
                       onChange={(e) => updateText({ fontFamily: e.target.value })}
                       className="w-full h-10 px-3 py-2 text-xs font-medium rounded-lg border border-border bg-background text-foreground shadow-2xs focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 cursor-pointer transition-colors"
@@ -219,7 +221,7 @@ export function InspectorPanel({
                           <optgroup key={cat.id} label={`── ${cat.label} ──`}>
                             {catFonts.map((font) => (
                               <option key={font.id} value={font.family}>
-                                {font.name} — {font.sampleText}
+                                {font.name} ({font.sampleText})
                               </option>
                             ))}
                           </optgroup>
@@ -250,6 +252,7 @@ export function InspectorPanel({
                     <div className="flex items-center gap-1 bg-background border border-border rounded-lg px-2 py-0.5 shadow-2xs focus-within:ring-2 focus-within:ring-indigo-500/40 focus-within:border-indigo-500">
                       <input
                         type="number"
+                        aria-label="Nilai persentase ukuran font relatif"
                         min={0.5}
                         max={30.0}
                         step={0.1}
@@ -268,6 +271,7 @@ export function InspectorPanel({
 
                   <input
                     type="range"
+                    aria-label="Slider ukuran font relatif"
                     min={0.5}
                     max={30.0}
                     step={0.1}
@@ -470,6 +474,17 @@ export function InspectorPanel({
                   checked={config.logo.tile}
                   onChange={(tile) => updateLogo({ tile })}
                 />
+                {config.logo.tile ? (
+                  <Slider
+                    label="Kerapatan Ubin Logo"
+                    min={1.2}
+                    max={3.5}
+                    step={0.1}
+                    unit="x"
+                    value={config.logo.tileSpacing}
+                    onChange={(tileSpacing) => updateLogo({ tileSpacing })}
+                  />
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -482,7 +497,12 @@ export function InspectorPanel({
               label="Aktifkan Bingkai / Frame"
               description="Beri sentuhan border artistik atau metadata banner"
               checked={config.frame.enabled}
-              onChange={(enabled) => updateFrame({ enabled })}
+              onChange={(enabled) =>
+                updateFrame({
+                  enabled,
+                  style: enabled && config.frame.style === 'none' ? 'solid' : config.frame.style,
+                })
+              }
             />
 
             {config.frame.enabled ? (

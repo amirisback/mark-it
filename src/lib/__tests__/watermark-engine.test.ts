@@ -5,6 +5,8 @@ import {
   computeCoordinates,
   ensureFontLoadedAsync,
   exportWatermarkedVideoAsync,
+  drawWatermarkOnCanvas,
+  drawWatermarkOnSocialCanvas,
 } from '@/lib/watermark-engine';
 import { CURATED_FONTS, FONT_CATEGORIES, FONT_SIZE_PRESETS } from '@/data/fonts';
 import { DEFAULT_WATERMARK_CONFIG } from '@/data/presets';
@@ -340,5 +342,675 @@ describe('Watermark Engine & Font Utilities', () => {
         (globalThis as unknown as { MediaRecorder?: unknown }).MediaRecorder = origMediaRecorder;
       }
     });
+
+    it('should enable canvas video track and compose audio stream properly', async () => {
+      const mockVideoTrack = { enabled: false, stop: () => {} };
+      const mockAudioTrack = { enabled: true, stop: () => {} };
+      let createdStreamTracks: unknown[] = [];
+
+      const fakeCanvas = {
+        width: 1280,
+        height: 720,
+        getContext: () => ({
+          imageSmoothingEnabled: true,
+          imageSmoothingQuality: 'high',
+          clearRect: () => {},
+          drawImage: () => {},
+          save: () => {},
+          restore: () => {},
+          measureText: () => ({ width: 100 }),
+          fillText: () => {},
+          strokeText: () => {},
+          translate: () => {},
+          rotate: () => {},
+          fillRect: () => {},
+          strokeRect: () => {},
+          beginPath: () => {},
+          moveTo: () => {},
+          lineTo: () => {},
+          stroke: () => {},
+          fill: () => {},
+        }),
+        captureStream: () => ({
+          getVideoTracks: () => [mockVideoTrack],
+          getTracks: () => [mockVideoTrack],
+        }),
+      };
+
+      const origDoc = (globalThis as unknown as { document?: unknown }).document;
+      (globalThis as unknown as { document: unknown }).document = {
+        createElement: (tag: string) => (tag === 'canvas' ? fakeCanvas : {}),
+        fonts: { check: () => true, load: async () => [] },
+      };
+
+      class MockStreamWithInspection {
+        tracks: unknown[];
+        constructor(tracks: unknown[] = []) {
+          this.tracks = tracks;
+          createdStreamTracks = tracks;
+        }
+        getTracks() {
+          return this.tracks;
+        }
+        getVideoTracks() {
+          return this.tracks.filter((t) => t === mockVideoTrack);
+        }
+        getAudioTracks() {
+          return this.tracks.filter((t) => t === mockAudioTrack);
+        }
+      }
+
+      const origMediaStream = (globalThis as unknown as { MediaStream?: unknown }).MediaStream;
+      const origMediaRecorder = (globalThis as unknown as { MediaRecorder?: unknown }).MediaRecorder;
+
+      class MockRecorder {
+        state = 'recording';
+        ondataavailable: ((e: { data: Blob }) => void) | null = null;
+        onstop: (() => void) | null = null;
+        static isTypeSupported() {
+          return true;
+        }
+        start() {}
+        stop() {
+          this.state = 'inactive';
+          if (this.onstop) this.onstop();
+        }
+      }
+
+      (globalThis as unknown as { MediaStream?: unknown }).MediaStream = MockStreamWithInspection;
+      (globalThis as unknown as { MediaRecorder?: unknown }).MediaRecorder = MockRecorder;
+
+      const listeners: Record<string, ((e?: Event) => void)[]> = {};
+      const fakeVideo = {
+        currentTime: 0,
+        duration: 1,
+        muted: false,
+        volume: 1,
+        paused: false,
+        play: () => Promise.resolve(),
+        pause: () => {},
+        addEventListener: (event: string, fn: (e?: Event) => void) => {
+          listeners[event] = listeners[event] || [];
+          listeners[event].push(fn);
+        },
+        removeEventListener: (event: string, fn: (e?: Event) => void) => {
+          if (listeners[event]) listeners[event] = listeners[event].filter((f) => f !== fn);
+        },
+        captureStream: () => ({
+          getAudioTracks: () => [mockAudioTrack],
+        }),
+      } as unknown as HTMLVideoElement;
+
+      try {
+        const promise = exportWatermarkedVideoAsync({
+          videoElement: fakeVideo,
+          sourceWidth: 1280,
+          sourceHeight: 720,
+          duration: 1,
+          config: DEFAULT_WATERMARK_CONFIG,
+        });
+
+        setTimeout(() => {
+          if (listeners['ended']) listeners['ended'].forEach((fn) => fn());
+        }, 10);
+
+        await promise;
+        expect(mockVideoTrack.enabled).toBe(true);
+        expect(createdStreamTracks).toContain(mockVideoTrack);
+        expect(createdStreamTracks).toContain(mockAudioTrack);
+      } finally {
+        (globalThis as unknown as { document?: unknown }).document = origDoc;
+        (globalThis as unknown as { MediaStream?: unknown }).MediaStream = origMediaStream;
+        (globalThis as unknown as { MediaRecorder?: unknown }).MediaRecorder = origMediaRecorder;
+      }
+    });
+
+    it('should not prematurely cancel requestVideoFrameCallback on 24fps/30fps videos (~42ms frame time)', async () => {
+      let rvfcCompletedCount = 0;
+      let nextHandle = 1;
+      const activeHandles = new Map<number, ReturnType<typeof setTimeout>>();
+
+      const listeners: Record<string, ((e?: Event) => void)[]> = {};
+      const fakeVideo = {
+        videoWidth: 1280,
+        videoHeight: 720,
+        currentTime: 0,
+        duration: 0.12,
+        muted: false,
+        volume: 1,
+        paused: false,
+        play: () => Promise.resolve(),
+        pause: () => {},
+        requestVideoFrameCallback: (cb: () => void) => {
+          const handle = nextHandle++;
+          // Simulate 24fps video frame delivery (~42ms > 33ms)
+          const timer = setTimeout(() => {
+            activeHandles.delete(handle);
+            rvfcCompletedCount++;
+            fakeVideo.currentTime += 0.045;
+            cb();
+          }, 42);
+          activeHandles.set(handle, timer);
+          return handle;
+        },
+        cancelVideoFrameCallback: (handle: number) => {
+          const timer = activeHandles.get(handle);
+          if (timer) {
+            clearTimeout(timer);
+            activeHandles.delete(handle);
+          }
+        },
+        addEventListener: (event: string, fn: (e?: Event) => void) => {
+          listeners[event] = listeners[event] || [];
+          listeners[event].push(fn);
+        },
+        removeEventListener: (event: string, fn: (e?: Event) => void) => {
+          if (listeners[event]) listeners[event] = listeners[event].filter((f) => f !== fn);
+        },
+        captureStream: () => ({
+          getAudioTracks: () => [],
+        }),
+      } as unknown as HTMLVideoElement;
+
+      const fakeCanvas = {
+        width: 1280,
+        height: 720,
+        getContext: () => ({
+          imageSmoothingEnabled: true,
+          imageSmoothingQuality: 'high',
+          clearRect: () => {},
+          drawImage: () => {},
+          save: () => {},
+          restore: () => {},
+          measureText: () => ({ width: 100 }),
+          fillText: () => {},
+          strokeText: () => {},
+          translate: () => {},
+          rotate: () => {},
+          fillRect: () => {},
+          strokeRect: () => {},
+          beginPath: () => {},
+          moveTo: () => {},
+          lineTo: () => {},
+          stroke: () => {},
+          fill: () => {},
+        }),
+        captureStream: () => ({
+          getVideoTracks: () => [{ enabled: true, stop: () => {} }],
+          getTracks: () => [{ enabled: true, stop: () => {} }],
+        }),
+      };
+
+      const origDoc = (globalThis as unknown as { document?: unknown }).document;
+      const origMediaStream = (globalThis as unknown as { MediaStream?: unknown }).MediaStream;
+      const origMediaRecorder = (globalThis as unknown as { MediaRecorder?: unknown }).MediaRecorder;
+
+      (globalThis as unknown as { document: unknown }).document = {
+        createElement: (tag: string) => (tag === 'canvas' ? fakeCanvas : {}),
+        fonts: { check: () => true, load: async () => [] },
+      };
+
+      class MockMediaStream {
+        tracks: unknown[];
+        constructor(tracks: unknown[] = []) {
+          this.tracks = tracks;
+        }
+        getTracks() {
+          return this.tracks;
+        }
+      }
+
+      class MockMediaRecorder {
+        static isTypeSupported = () => true;
+        state = 'recording';
+        ondataavailable: ((e: { data: Blob }) => void) | null = null;
+        onstop: (() => void) | null = null;
+        start() {}
+        stop() {
+          this.state = 'inactive';
+          if (this.onstop) this.onstop();
+        }
+      }
+
+      (globalThis as unknown as { MediaStream?: unknown }).MediaStream = MockMediaStream;
+      (globalThis as unknown as { MediaRecorder?: unknown }).MediaRecorder = MockMediaRecorder;
+
+      try {
+        await exportWatermarkedVideoAsync({
+          videoElement: fakeVideo,
+          sourceWidth: 1280,
+          sourceHeight: 720,
+          duration: 0.12,
+          fps: 30,
+          config: DEFAULT_WATERMARK_CONFIG,
+        });
+
+        expect(rvfcCompletedCount).toBeGreaterThanOrEqual(2);
+      } finally {
+        activeHandles.forEach((t) => clearTimeout(t));
+        (globalThis as unknown as { document?: unknown }).document = origDoc;
+        (globalThis as unknown as { MediaStream?: unknown }).MediaStream = origMediaStream;
+        (globalThis as unknown as { MediaRecorder?: unknown }).MediaRecorder = origMediaRecorder;
+      }
+    });
+
+    it('should override zero-opacity and negative z-index on videoElement during rendering to prevent GPU decoder suspension', async () => {
+      let observedOpacityDuringDraw = '';
+      let observedZIndexDuringDraw = '';
+      let drawCallsAfterPlay = 0;
+      let isPlaying = false;
+
+      const listeners: Record<string, ((e?: Event) => void)[]> = {};
+      const fakeVideo = {
+        videoWidth: 1280,
+        videoHeight: 720,
+        currentTime: 0,
+        duration: 1,
+        muted: false,
+        volume: 1,
+        get paused() {
+          return !isPlaying;
+        },
+        style: {
+          opacity: '0',
+          zIndex: '-9999',
+          top: '-9999px',
+          left: '-9999px',
+          position: 'fixed',
+          width: '1px',
+          height: '1px',
+          pointerEvents: 'none',
+        },
+        play: () => {
+          isPlaying = true;
+          return Promise.resolve();
+        },
+        pause: () => {
+          isPlaying = false;
+        },
+        addEventListener: (event: string, fn: (e?: Event) => void) => {
+          listeners[event] = listeners[event] || [];
+          listeners[event].push(fn);
+        },
+        removeEventListener: (event: string, fn: (e?: Event) => void) => {
+          if (listeners[event]) listeners[event] = listeners[event].filter((f) => f !== fn);
+        },
+        captureStream: () => ({
+          getAudioTracks: () => [],
+        }),
+      } as unknown as HTMLVideoElement;
+
+      const fakeCanvas = {
+        width: 1280,
+        height: 720,
+        getContext: () => ({
+          imageSmoothingEnabled: true,
+          imageSmoothingQuality: 'high',
+          clearRect: () => {},
+          drawImage: (source: unknown) => {
+            if (source === fakeVideo && isPlaying) {
+              drawCallsAfterPlay++;
+              observedOpacityDuringDraw = fakeVideo.style.opacity;
+              observedZIndexDuringDraw = fakeVideo.style.zIndex;
+            }
+          },
+          save: () => {},
+          restore: () => {},
+          measureText: () => ({ width: 100 }),
+          fillText: () => {},
+          strokeText: () => {},
+          translate: () => {},
+          rotate: () => {},
+          fillRect: () => {},
+          strokeRect: () => {},
+          beginPath: () => {},
+          moveTo: () => {},
+          lineTo: () => {},
+          stroke: () => {},
+          fill: () => {},
+        }),
+        captureStream: () => ({
+          getVideoTracks: () => [{ enabled: true, stop: () => {} }],
+          getTracks: () => [{ enabled: true, stop: () => {} }],
+        }),
+      };
+
+      const origDoc = (globalThis as unknown as { document?: unknown }).document;
+      const origMediaStream = (globalThis as unknown as { MediaStream?: unknown }).MediaStream;
+      const origMediaRecorder = (globalThis as unknown as { MediaRecorder?: unknown }).MediaRecorder;
+
+      (globalThis as unknown as { document: unknown }).document = {
+        createElement: (tag: string) => (tag === 'canvas' ? fakeCanvas : {}),
+        fonts: { check: () => true, load: async () => [] },
+      };
+
+      class MockMediaStream {
+        tracks: unknown[];
+        constructor(tracks: unknown[] = []) {
+          this.tracks = tracks;
+        }
+        getTracks() {
+          return this.tracks;
+        }
+      }
+
+      class MockMediaRecorder {
+        static isTypeSupported = () => true;
+        state = 'recording';
+        ondataavailable: ((e: { data: Blob }) => void) | null = null;
+        onstop: (() => void) | null = null;
+        start() {}
+        stop() {
+          this.state = 'inactive';
+          if (this.onstop) this.onstop();
+        }
+      }
+
+      (globalThis as unknown as { MediaStream?: unknown }).MediaStream = MockMediaStream;
+      (globalThis as unknown as { MediaRecorder?: unknown }).MediaRecorder = MockMediaRecorder;
+
+      try {
+        const promise = exportWatermarkedVideoAsync({
+          videoElement: fakeVideo,
+          sourceWidth: 1280,
+          sourceHeight: 720,
+          duration: 1,
+          config: DEFAULT_WATERMARK_CONFIG,
+        });
+
+        setTimeout(() => {
+          if (listeners['ended']) listeners['ended'].forEach((fn) => fn());
+        }, 15);
+
+        await promise;
+
+        expect(drawCallsAfterPlay).toBeGreaterThanOrEqual(1);
+        expect(observedOpacityDuringDraw).not.toBe('0');
+        expect(Number(observedOpacityDuringDraw)).toBeGreaterThan(0);
+        expect(Number(observedZIndexDuringDraw)).toBeGreaterThanOrEqual(0);
+        // Restored after cleanup
+        expect(fakeVideo.style.opacity).toBe('0');
+        expect(fakeVideo.style.zIndex).toBe('-9999');
+      } finally {
+        (globalThis as unknown as { document?: unknown }).document = origDoc;
+        (globalThis as unknown as { MediaStream?: unknown }).MediaStream = origMediaStream;
+        (globalThis as unknown as { MediaRecorder?: unknown }).MediaRecorder = origMediaRecorder;
+      }
+    });
+
+    it('should restore videoElement.style and stop media tracks if playback fails', async () => {
+      let stoppedVideoTrack = false;
+      const fakeVideo = {
+        videoWidth: 1280,
+        videoHeight: 720,
+        currentTime: 0,
+        duration: 1,
+        muted: false,
+        volume: 1,
+        paused: true,
+        style: {
+          opacity: '0',
+          zIndex: '-10',
+          top: '-9999px',
+          left: '-9999px',
+          bottom: '',
+          right: '',
+          width: '1px',
+          height: '1px',
+          position: 'fixed',
+          pointerEvents: 'none',
+        },
+        play: () => Promise.reject(new Error('Decoder failure')),
+        pause: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        captureStream: () => ({
+          getAudioTracks: () => [],
+          getVideoTracks: () => [],
+        }),
+      } as unknown as HTMLVideoElement;
+
+      const fakeCanvas = {
+        width: 1280,
+        height: 720,
+        getContext: () => ({
+          imageSmoothingEnabled: true,
+          imageSmoothingQuality: 'high',
+          clearRect: () => {},
+          drawImage: () => {},
+          save: () => {},
+          restore: () => {},
+          measureText: () => ({ width: 100 }),
+          fillText: () => {},
+          strokeText: () => {},
+          translate: () => {},
+          rotate: () => {},
+          fillRect: () => {},
+          strokeRect: () => {},
+        }),
+        captureStream: () => ({
+          getVideoTracks: () => [
+            {
+              enabled: true,
+              stop: () => {
+                stoppedVideoTrack = true;
+              },
+            },
+          ],
+          getTracks: () => [
+            {
+              stop: () => {
+                stoppedVideoTrack = true;
+              },
+            },
+          ],
+        }),
+      };
+
+      const origDoc = (globalThis as unknown as { document?: unknown }).document;
+      const origMediaStream = (globalThis as unknown as { MediaStream?: unknown }).MediaStream;
+      const origMediaRecorder = (globalThis as unknown as { MediaRecorder?: unknown }).MediaRecorder;
+
+      (globalThis as unknown as { document: unknown }).document = {
+        createElement: (tag: string) => (tag === 'canvas' ? fakeCanvas : {}),
+        fonts: { check: () => true, load: async () => [] },
+      };
+
+      class MockMediaStream {
+        tracks: unknown[];
+        constructor(tracks: unknown[] = []) {
+          this.tracks = tracks;
+        }
+        getTracks() {
+          return this.tracks;
+        }
+      }
+
+      class MockMediaRecorder {
+        static isTypeSupported = () => true;
+        state = 'recording';
+        onstop: (() => void) | null = null;
+        start() {}
+        stop() {
+          this.state = 'inactive';
+          if (this.onstop) this.onstop();
+        }
+      }
+
+      (globalThis as unknown as { MediaStream?: unknown }).MediaStream = MockMediaStream;
+      (globalThis as unknown as { MediaRecorder?: unknown }).MediaRecorder = MockMediaRecorder;
+
+      try {
+        await expect(
+          exportWatermarkedVideoAsync({
+            videoElement: fakeVideo,
+            sourceWidth: 1280,
+            sourceHeight: 720,
+            duration: 1,
+            config: DEFAULT_WATERMARK_CONFIG,
+          })
+        ).rejects.toThrow('Gagal memutar video untuk rendering');
+
+        expect(stoppedVideoTrack).toBe(true);
+        expect(fakeVideo.style.opacity).toBe('0');
+        expect(fakeVideo.style.zIndex).toBe('-10');
+      } finally {
+        (globalThis as unknown as { document?: unknown }).document = origDoc;
+        (globalThis as unknown as { MediaStream?: unknown }).MediaStream = origMediaStream;
+        (globalThis as unknown as { MediaRecorder?: unknown }).MediaRecorder = origMediaRecorder;
+      }
+    });
+  });
+
+  describe('drawWatermarkOnCanvas & drawWatermarkOnSocialCanvas - Frame & Safety Guards', () => {
+    it('should align banner fillRect height with exact bannerH (0.08 * sourceHeight) without overlapping source image', () => {
+      const fillRectCalls: Array<{ x: number; y: number; w: number; h: number }> = [];
+      const fakeCanvas = {
+        width: 0,
+        height: 0,
+        getContext: () => ({
+          imageSmoothingEnabled: true,
+          imageSmoothingQuality: 'high',
+          clearRect: () => {},
+          drawImage: () => {},
+          save: () => {},
+          restore: () => {},
+          measureText: () => ({ width: 80 }),
+          fillText: () => {},
+          strokeText: () => {},
+          translate: () => {},
+          rotate: () => {},
+          fillRect: (x: number, y: number, w: number, h: number) => {
+            fillRectCalls.push({ x, y, w, h });
+          },
+          strokeRect: () => {},
+        }),
+      } as unknown as HTMLCanvasElement;
+
+      const config = {
+        ...DEFAULT_WATERMARK_CONFIG,
+        text: { ...DEFAULT_WATERMARK_CONFIG.text, enabled: false },
+        frame: {
+          ...DEFAULT_WATERMARK_CONFIG.frame,
+          enabled: true,
+          style: 'banner' as const,
+          metaText: 'Shot on MarkIt',
+        },
+      };
+
+      drawWatermarkOnCanvas(
+        fakeCanvas,
+        {} as HTMLImageElement,
+        1000,
+        1000,
+        config,
+        null
+      );
+
+      // sourceHeight = 1000 => bannerH = 80, canvas.height = 1080
+      expect(fakeCanvas.width).toBe(1000);
+      expect(fakeCanvas.height).toBe(1080);
+      expect(fillRectCalls.length).toBe(1);
+      expect(fillRectCalls[0]).toEqual({ x: 0, y: 1000, w: 1000, h: 80 });
+    });
+
+    it('should render Polaroid card frame and metadata in drawWatermarkOnSocialCanvas', () => {
+      const fillRectCalls: Array<{ x: number; y: number; w: number; h: number }> = [];
+      const fillTextCalls: string[] = [];
+      const fakeCanvas = {
+        width: 0,
+        height: 0,
+        getContext: () => ({
+          imageSmoothingEnabled: true,
+          imageSmoothingQuality: 'high',
+          clearRect: () => {},
+          drawImage: () => {},
+          save: () => {},
+          restore: () => {},
+          measureText: () => ({ width: 80 }),
+          fillText: (text: string) => {
+            fillTextCalls.push(text);
+          },
+          strokeText: () => {},
+          translate: () => {},
+          rotate: () => {},
+          fillRect: (x: number, y: number, w: number, h: number) => {
+            fillRectCalls.push({ x, y, w, h });
+          },
+          strokeRect: () => {},
+        }),
+      } as unknown as HTMLCanvasElement;
+
+      const config = {
+        ...DEFAULT_WATERMARK_CONFIG,
+        text: { ...DEFAULT_WATERMARK_CONFIG.text, enabled: false },
+        frame: {
+          ...DEFAULT_WATERMARK_CONFIG.frame,
+          enabled: true,
+          style: 'card' as const,
+          metaText: 'Polaroid Social Test',
+        },
+      };
+
+      drawWatermarkOnSocialCanvas(
+        fakeCanvas,
+        {} as HTMLImageElement,
+        720,
+        1280,
+        config,
+        null,
+        720,
+        1280
+      );
+
+      expect(fillRectCalls.length).toBe(4);
+      expect(fillTextCalls).toContain('Polaroid Social Test');
+    });
+
+    it('should guard against zero-width logo image and non-positive tileSpacing without throwing or hanging', () => {
+      const fakeCanvas = {
+        width: 0,
+        height: 0,
+        getContext: () => ({
+          imageSmoothingEnabled: true,
+          imageSmoothingQuality: 'high',
+          clearRect: () => {},
+          drawImage: () => {},
+          save: () => {},
+          restore: () => {},
+          measureText: () => ({ width: 50 }),
+          fillText: () => {},
+          strokeText: () => {},
+          translate: () => {},
+          rotate: () => {},
+          fillRect: () => {},
+          strokeRect: () => {},
+        }),
+      } as unknown as HTMLCanvasElement;
+
+      const config = {
+        ...DEFAULT_WATERMARK_CONFIG,
+        text: {
+          ...DEFAULT_WATERMARK_CONFIG.text,
+          enabled: true,
+          tile: true,
+          tileSpacing: 0, // Invalid zero spacing should be clamped safely
+        },
+        logo: {
+          ...DEFAULT_WATERMARK_CONFIG.logo,
+          enabled: true,
+          logoUrl: 'blob:test',
+          tile: true,
+          tileSpacing: -2, // Invalid negative spacing
+        },
+      };
+
+      const zeroLogo = { width: 0, height: 0 } as HTMLImageElement;
+
+      expect(() =>
+        drawWatermarkOnCanvas(fakeCanvas, {} as HTMLImageElement, 800, 600, config, zeroLogo)
+      ).not.toThrow();
+    });
   });
 });
+

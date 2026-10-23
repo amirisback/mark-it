@@ -1,0 +1,48 @@
+======================================================================
+MARKIT STUDIO: TASK-003 E2E TEST PROOF LOG
+Command: bun run test:e2e
+Date: 2026-10-23
+======================================================================
+
+$ bun test e2e
+bun test v1.4.3 (c6da4a4d3)
+
+e2e\app.test.ts:
+(pass) E2E Application Workflow Test Suite > E2E Security & Proxy Middleware Gateways > should intercept and block path traversal / sensitive probe requests with HTTP 403 [3.62ms]
+(pass) E2E Application Workflow Test Suite > E2E Security & Proxy Middleware Gateways > should block automated vulnerability scanners with HTTP 403 [0.55ms]
+(pass) E2E Application Workflow Test Suite > E2E Security & Proxy Middleware Gateways > should allow legitimate traffic with rate limit tracking headers attached [0.69ms]
+(pass) E2E Application Workflow Test Suite > E2E Security & Proxy Middleware Gateways > should throttle requests exceeding strict tier limit with HTTP 429 [1.40ms]
+(pass) E2E Application Workflow Test Suite > E2E Cryptographic Security Utilities > should execute encryption and decryption roundtrip cleanly [1.19ms]
+(pass) E2E Application Workflow Test Suite > E2E Cryptographic Security Utilities > should safely return null on tampered ciphertext [0.18ms]
+(pass) E2E Application Workflow Test Suite > E2E Cryptographic Security Utilities > should throw error on empty plaintext encryption [0.14ms]
+(pass) E2E Application Workflow Test Suite > E2E ID Obfuscation (Sqids) > should execute obfuscate and deobfuscate roundtrip cleanly [1.29ms]
+(pass) E2E Application Workflow Test Suite > E2E ID Obfuscation (Sqids) > should reject negative or invalid numbers [0.15ms]
+(pass) E2E Application Workflow Test Suite > E2E ID Obfuscation (Sqids) > should return null on invalid hashes [0.05ms]
+(pass) E2E Application Workflow Test Suite > E2E Next.js Core Routes & Metadata > should generate compliant PWA Web Manifest [0.13ms]
+(pass) E2E Application Workflow Test Suite > E2E Next.js Core Routes & Metadata > should generate compliant robots.txt route structure [0.09ms]
+(pass) E2E Application Workflow Test Suite > E2E Next.js Core Routes & Metadata > should generate compliant sitemap.xml entries [0.29ms]
+(pass) E2E Application Workflow Test Suite > E2E Next.js Core Routes & Metadata > should generate comprehensive root layout metadata [1.99ms]
+(pass) E2E Application Workflow Test Suite > E2E Watermark Studio Engine & Coordinate Pipeline > should calculate correct 9-grid coordinates for portrait and landscape media [0.28ms]
+(pass) E2E Application Workflow Test Suite > E2E Watermark Studio Engine & Coordinate Pipeline > should compute linear font size in pixels and respect the 10px minimum boundary [0.17ms]
+(pass) E2E Application Workflow Test Suite > E2E Watermark Studio Engine & Coordinate Pipeline > should sanitize font families and ensure multi-word font names are quoted for Canvas 2D [0.14ms]
+(pass) E2E Application Workflow Test Suite > E2E Watermark Studio Engine & Coordinate Pipeline > should verify that all curated fonts have non-CSS variable definitions [0.14ms]
+(pass) E2E Application Workflow Test Suite > E2E Watermark Studio Engine & Coordinate Pipeline > should safely reject video export immediately if AbortSignal is already triggered [1.77ms]
+(pass) E2E Application Workflow Test Suite > E2E Watermark Studio Engine & Coordinate Pipeline > should reject exportCanvasToBlob when canvas dimensions are zero or invalid [0.33ms]
+(pass) E2E Application Workflow Test Suite > E2E Watermark Studio Engine & Coordinate Pipeline > should render 9:16 (720x1280), 1:1 (1080x1080), 16:9 (1920x1080), and original canvases with frames and tiled logos [5.18ms]
+(pass) E2E Application Workflow Test Suite > E2E Studio Workspace Presets & Batch Lifecycle Workflow > should verify that all presets have valid badge, description, and applicable configs [0.31ms]
+(pass) E2E Application Workflow Test Suite > E2E Studio Workspace Presets & Batch Lifecycle Workflow > should verify correct batch queue activeIndex clamping logic on item removal [0.40ms]
+(pass) E2E Application Workflow Test Suite > E2E Studio Dictionary & Localization Parity > should ensure identical structural parity for studio translations between id and en [1.42ms]
+(pass) E2E Application Workflow Test Suite > E2E TASK-003 Code Audit & Bugfix Verification (AC-01 through AC-08) > AC-01: Switch single-trigger decoupled architecture & 44px hit-target [15.21ms]
+(pass) E2E Application Workflow Test Suite > E2E TASK-003 Code Audit & Bugfix Verification (AC-01 through AC-08) > AC-02: Color picker hex normalizer & zero inline IIFE [4.56ms]
+(pass) E2E Application Workflow Test Suite > E2E TASK-003 Code Audit & Bugfix Verification (AC-01 through AC-08) > AC-03: Video duration finite sanitizer & seek clamping [0.33ms]
+(pass) E2E Application Workflow Test Suite > E2E TASK-003 Code Audit & Bugfix Verification (AC-01 through AC-08) > AC-04: Canvas viewer preview ratio badge parity [0.27ms]
+(pass) E2E Application Workflow Test Suite > E2E TASK-003 Code Audit & Bugfix Verification (AC-01 through AC-08) > AC-05: Volume input full WAI-ARIA slider attributes [0.17ms]
+(pass) E2E Application Workflow Test Suite > E2E TASK-003 Code Audit & Bugfix Verification (AC-01 through AC-08) > AC-06: Logo blob URL memory leak revocation on preset switch [0.23ms]
+(pass) E2E Application Workflow Test Suite > E2E TASK-003 Code Audit & Bugfix Verification (AC-01 through AC-08) > AC-07: Total Duration finite protection in watermark engine [0.19ms]
+(pass) E2E Application Workflow Test Suite > E2E TASK-003 Code Audit & Bugfix Verification (AC-01 through AC-08) > AC-08: Complete anti-slop zero em dash (—) compliance [2.16ms]
+
+ 32 pass
+ 0 fail
+ 262 expect() calls
+Ran 32 tests across 1 file. [219.00ms]
+Status: PASS (Exit code: 0)

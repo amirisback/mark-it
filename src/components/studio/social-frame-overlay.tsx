@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import type { SocialFrameType } from '@/types/watermark';
 
 export interface SocialFrameOverlayProps {
@@ -265,9 +264,9 @@ export function SocialFrameOverlay({
                     </div>
                   </div>
                   <span className="text-xs sm:text-sm font-bold tracking-tight">studio.markit</span>
-                  <button type="button" className="text-[10px] font-semibold px-2 py-0.5 rounded border border-white/60 bg-white/10">
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded border border-white/60 bg-white/10">
                     Ikuti
-                  </button>
+                  </span>
                 </div>
                 <p className="text-[11px] sm:text-xs leading-snug line-clamp-2 text-white/95">
                   Pastikan logo atau teks watermark berada di zona aman Instagram Reels agar tidak tertutup tombol... <span className="opacity-70">selengkapnya</span>
@@ -372,9 +371,9 @@ export function SocialFrameOverlay({
                     M
                   </div>
                   <span className="text-xs sm:text-sm font-bold tracking-tight">@MarkItStudio</span>
-                  <button type="button" className="text-[10px] font-bold px-2 py-1 rounded-full bg-red-600 text-white shadow-xs">
+                  <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-red-600 text-white shadow-xs">
                     Subscribe
-                  </button>
+                  </span>
                 </div>
                 <p className="text-[11px] sm:text-xs leading-snug line-clamp-2 text-white/95">
                   Posisi watermark di YouTube Shorts tanpa kehalang tombol interaksi jempol dan tombol subscribe!

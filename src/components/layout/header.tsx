@@ -1,9 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { MAIN_NAV_ITEMS } from '@/data/navigation';
-import { Button } from '@/components/ui/button';
 import { ThemeSwitcher } from '@/app/_components/theme-switcher';
 
 export interface HeaderProps {
@@ -72,23 +71,24 @@ export function Header({ appName = 'MarkIt Studio' }: HeaderProps) {
             <ThemeSwitcher variant="compact" />
           </div>
 
-          <a href="#studio">
-            <Button variant="brand" size="sm" className="hidden sm:inline-flex">
-              <svg
-                className="w-4 h-4 mr-1"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 4v16m8-8H4"
-                />
-              </svg>
-              Buka Studio
-            </Button>
+          <a
+            href="#studio"
+            className="hidden sm:inline-flex items-center justify-center rounded-lg font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:from-indigo-500 hover:to-violet-500 shadow-sm hover:shadow-indigo-500/25 h-8 px-3 text-xs gap-1.5"
+          >
+            <svg
+              className="w-4 h-4 mr-1"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 4v16m8-8H4"
+              />
+            </svg>
+            Buka Studio
           </a>
 
           {/* Mobile Menu Button */}
@@ -97,6 +97,7 @@ export function Header({ appName = 'MarkIt Studio' }: HeaderProps) {
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             className="md:hidden inline-flex items-center justify-center p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary focus:outline-none"
             aria-label="Toggle menu"
+            aria-expanded={mobileMenuOpen}
           >
             <svg
               className="w-6 h-6"
@@ -157,10 +158,12 @@ export function Header({ appName = 'MarkIt Studio' }: HeaderProps) {
           </div>
 
           <div className="pt-2">
-            <a href="#studio" onClick={() => setMobileMenuOpen(false)}>
-              <Button variant="brand" className="w-full justify-center">
-                Mulai Beri Watermark
-              </Button>
+            <a
+              href="#studio"
+              onClick={() => setMobileMenuOpen(false)}
+              className="w-full inline-flex items-center justify-center rounded-lg font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:from-indigo-500 hover:to-violet-500 shadow-sm hover:shadow-indigo-500/25 h-9 px-4 text-sm gap-2"
+            >
+              Mulai Beri Watermark
             </a>
           </div>
         </div>

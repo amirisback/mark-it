@@ -48,7 +48,7 @@
     "documentation": "Dokumentasi"
   },
   "metadata": {
-    "title": "MarkIt — Tambahkan Watermark pada Foto & Video Secara Instan",
+    "title": "MarkIt: Tambahkan Watermark pada Foto & Video Secara Instan",
     "description": "Beri watermark teks, logo transparan, atau bingkai pada foto dan video secara instan dalam batch. 100% diproses di browser tanpa unggah ke server."
   },
   "demo": {
@@ -250,7 +250,7 @@
     }
   },
   "footer": {
-    "desc": "MarkIt Studio — Platform watermarking foto dan video modern, cepat, dan 100% privat langsung dari browser Anda.",
+    "desc": "MarkIt Studio: Platform watermarking foto dan video modern, cepat, dan 100% privat langsung dari browser Anda.",
     "links": {
       "product": "Produk",
       "features": "Fitur",

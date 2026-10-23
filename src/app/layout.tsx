@@ -60,7 +60,7 @@ export default async function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <head>
-        {/* JSON-LD Structured Data — Organization */}
+        {/* JSON-LD Structured Data: Organization */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{

@@ -48,7 +48,7 @@
     "documentation": "Documentation"
   },
   "metadata": {
-    "title": "MarkIt — Add Watermark to Photos & Videos Instantly",
+    "title": "MarkIt: Add Watermark to Photos & Videos Instantly",
     "description": "Add custom text, transparent logos, or aesthetic frames to photos and videos instantly in batch. 100% processed client-side in your browser."
   },
   "demo": {
@@ -250,7 +250,7 @@
     }
   },
   "footer": {
-    "desc": "MarkIt Studio — Modern, lightning-fast, and 100% private photo and video watermarking directly inside your web browser.",
+    "desc": "MarkIt Studio: Modern, lightning-fast, and 100% private photo and video watermarking directly inside your web browser.",
     "links": {
       "product": "Product",
       "features": "Features",

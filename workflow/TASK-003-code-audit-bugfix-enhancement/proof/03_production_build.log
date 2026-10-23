@@ -1,0 +1,41 @@
+======================================================================
+MARKIT STUDIO: TASK-003 PRODUCTION BUILD PROOF LOG
+Command: bun run build
+Date: 2026-10-23
+======================================================================
+
+$ next build --webpack
+▲ Next.js 16.3.6 (webpack)
+- Environments: .env
+✓ Running next.config.ts took 717ms
+
+  Creating an optimized production build ...
+✓ (serwist) Bundling the service worker script with the URL '/sw.js' and the scope '/'...
+✓ Compiled successfully in 7.0s
+  Running TypeScript ...
+  Finished TypeScript in 12.9s ...
+  Collecting page data using 8 workers ...
+  Generating static pages using 8 workers (0/7) ...
+  Generating static pages using 8 workers (1/7) 
+  Generating static pages using 8 workers (3/7) 
+  Generating static pages using 8 workers (5/7) 
+✓ Generating static pages using 8 workers (7/7) in 3.0s
+  Finalizing page optimization ...
+  Collecting build traces ...
+
+Route (app)
+┌ ƒ /
+├ ƒ /_not-found
+├ ○ /manifest.webmanifest
+├ ○ /robots.txt
+└ ○ /sitemap.xml
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
+Status: SUCCESS (Exit code: 0)
+Zero compilation warnings or errors.
+Serwist service worker bundled cleanly.
+TypeScript verification passed.

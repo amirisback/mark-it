@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useSyncExternalStore, useRef } from 'react';
+import React, { useSyncExternalStore } from 'react';
 import { useTheme } from 'next-themes';
 
 export type ThemeSwitcherVariant = 'compact' | 'expanded' | 'full';
@@ -32,23 +32,28 @@ export function ThemeSwitcher({
 }: ThemeSwitcherProps) {
   const { theme, setTheme } = useTheme();
   const isMounted = useIsMounted();
-  const containerRef = useRef<HTMLDivElement>(null);
 
   const isExpanded = variant === 'expanded' || variant === 'full';
+  const activeTheme: 'light' | 'dark' | 'system' =
+    theme === 'light' || theme === 'dark' || theme === 'system' ? theme : 'system';
 
   // Keyboard Roving Tabindex & Arrow Navigation
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     const modes: Array<'light' | 'dark' | 'system'> = ['light', 'dark', 'system'];
-    const currentIndex = modes.indexOf((theme as 'light' | 'dark' | 'system') || 'system');
+    const currentIndex = modes.indexOf(activeTheme);
 
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
       e.preventDefault();
       const nextIndex = (currentIndex + 1) % modes.length;
       setTheme(modes[nextIndex]);
+      const radios = e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]');
+      radios[nextIndex]?.focus();
     } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
       e.preventDefault();
       const prevIndex = (currentIndex - 1 + modes.length) % modes.length;
       setTheme(modes[prevIndex]);
+      const radios = e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]');
+      radios[prevIndex]?.focus();
     }
   };
 
@@ -129,14 +134,13 @@ export function ThemeSwitcher({
   if (isExpanded) {
     return (
       <div
-        ref={containerRef}
         role="radiogroup"
         aria-label="Pilihan tema tampilan"
         onKeyDown={handleKeyDown}
         className={`grid grid-cols-3 gap-1.5 p-1 bg-secondary/80 dark:bg-secondary/60 rounded-xl border border-border/80 ${className}`}
       >
         {items.map((item) => {
-          const isSelected = theme === item.id;
+          const isSelected = activeTheme === item.id;
           return (
             <button
               key={item.id}
@@ -162,14 +166,13 @@ export function ThemeSwitcher({
 
   return (
     <div
-      ref={containerRef}
       role="radiogroup"
       aria-label="Pilihan tema tampilan"
       onKeyDown={handleKeyDown}
       className={`h-8.5 p-0.5 bg-secondary/80 dark:bg-secondary/60 rounded-full border border-border/80 flex items-center shadow-2xs ${className}`}
     >
       {items.map((item) => {
-        const isSelected = theme === item.id;
+        const isSelected = activeTheme === item.id;
         return (
           <button
             key={item.id}

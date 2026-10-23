@@ -33,7 +33,23 @@ const MALICIOUS_USER_AGENTS: RegExp[] = [
  * Validates if the request pathname matches known vulnerability probes or sensitive files.
  */
 export function isSuspiciousPath(pathname: string): boolean {
-  return SUSPICIOUS_PATH_PATTERNS.some((pattern) => pattern.test(pathname));
+  if (SUSPICIOUS_PATH_PATTERNS.some((pattern) => pattern.test(pathname))) {
+    return true;
+  }
+  let current = pathname;
+  for (let i = 0; i < 2; i++) {
+    try {
+      const decoded = decodeURIComponent(current);
+      if (decoded === current) break;
+      if (SUSPICIOUS_PATH_PATTERNS.some((pattern) => pattern.test(decoded))) {
+        return true;
+      }
+      current = decoded;
+    } catch {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**

@@ -15,7 +15,7 @@ export default async function Home() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background font-sans text-foreground">
-      {/* JSON-LD Structured Data — WebSite */}
+      {/* JSON-LD Structured Data: WebSite */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{

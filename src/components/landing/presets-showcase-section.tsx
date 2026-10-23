@@ -1,7 +1,7 @@
-import React from 'react';
+'use client';
+
 import { WATERMARK_PRESETS } from '@/data/presets';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 
 export function PresetsShowcaseSection() {
   return (
@@ -68,10 +68,16 @@ export function PresetsShowcaseSection() {
                 </div>
               </div>
 
-              <a href="#studio">
-                <Button variant="outline" size="sm" className="w-full text-xs">
-                  Gunakan di Studio Editor
-                </Button>
+              <a
+                href="#studio"
+                onClick={() => {
+                  window.dispatchEvent(
+                    new CustomEvent('markit:apply-preset', { detail: preset })
+                  );
+                }}
+                className="w-full inline-flex items-center justify-center rounded-lg font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring border border-border bg-transparent text-foreground hover:bg-secondary/60 h-8 px-3 text-xs gap-1.5"
+              >
+                Gunakan di Studio Editor
               </a>
             </div>
           ))}

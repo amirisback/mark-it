@@ -9,6 +9,16 @@ import type {
 } from '@/types/watermark';
 
 /**
+ * Returns a finite positive number, or fallback if NaN, Infinity, or non-positive
+ */
+export function getSafeFiniteDuration(duration: unknown, fallback = 0): number {
+  if (typeof duration === 'number' && Number.isFinite(duration) && duration > 0) {
+    return duration;
+  }
+  return fallback;
+}
+
+/**
  * Menerapkan kualitas smoothing tinggi pada konteks 2D Canvas
  */
 export function applyPristineCanvasSmoothing(ctx: CanvasRenderingContext2D): void {
@@ -22,18 +32,34 @@ export function applyPristineCanvasSmoothing(ctx: CanvasRenderingContext2D): voi
 export function loadImageAsync(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    let isSettled = false;
+    const timeout = setTimeout(() => {
+      if (!isSettled) {
+        isSettled = true;
+        reject(new Error(`Batas waktu (timeout) memuat gambar terlampaui: ${src}`));
+      }
+    }, 15000);
+
     // Hindari crossOrigin pada blob: atau data: URL untuk mencegah security taint
     if (!src.startsWith('blob:') && !src.startsWith('data:')) {
       img.crossOrigin = 'anonymous';
     }
     img.onload = () => {
+      if (isSettled) return;
+      isSettled = true;
+      clearTimeout(timeout);
       if (typeof img.decode === 'function') {
         img.decode().then(() => resolve(img)).catch(() => resolve(img));
       } else {
         resolve(img);
       }
     };
-    img.onerror = (err) => reject(new Error(`Gagal memuat gambar: ${String(err)}`));
+    img.onerror = (err) => {
+      if (isSettled) return;
+      isSettled = true;
+      clearTimeout(timeout);
+      reject(new Error(`Gagal memuat gambar: ${String(err)}`));
+    };
     img.src = src;
   });
 }
@@ -114,6 +140,7 @@ export function drawWatermarkOnCanvas(
   config: WatermarkFullConfig,
   logoImg?: HTMLImageElement | null
 ): void {
+  if (sourceWidth <= 0 || sourceHeight <= 0) return;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
@@ -127,21 +154,27 @@ export function drawWatermarkOnCanvas(
   const mediaDrawWidth = sourceWidth;
   const mediaDrawHeight = sourceHeight;
   let bannerHeight = 0;
+  let cardBorder = 0;
+  let cardBottom = 0;
 
   if (frame.enabled && frame.style === 'banner') {
     bannerHeight = Math.max(48, Math.round(sourceHeight * 0.08));
     finalCanvasHeight = sourceHeight + bannerHeight;
   } else if (frame.enabled && frame.style === 'card') {
-    const cardBorder = Math.round(sourceWidth * (frame.borderWidth / 100));
-    const cardBottom = Math.round(sourceHeight * 0.16);
+    cardBorder = Math.max(1, Math.round(sourceWidth * (frame.borderWidth / 100)));
+    cardBottom = Math.round(sourceHeight * 0.16);
     finalCanvasWidth = sourceWidth + cardBorder * 2;
     finalCanvasHeight = sourceHeight + cardBorder + cardBottom;
     mediaDrawX = cardBorder;
     mediaDrawY = cardBorder;
   }
 
-  canvas.width = finalCanvasWidth;
-  canvas.height = finalCanvasHeight;
+  if (canvas.width !== finalCanvasWidth) {
+    canvas.width = finalCanvasWidth;
+  }
+  if (canvas.height !== finalCanvasHeight) {
+    canvas.height = finalCanvasHeight;
+  }
 
   // Terapkan kualitas smoothing tinggi segera setelah alokasi dimensi kanvas
   applyPristineCanvasSmoothing(ctx);
@@ -158,7 +191,11 @@ export function drawWatermarkOnCanvas(
   ctx.drawImage(mediaSource, mediaDrawX, mediaDrawY, mediaDrawWidth, mediaDrawHeight);
 
   // 3. Gambar lapisan overlay watermark (frame, teks, dan logo)
-  drawWatermarkOverlays(ctx, finalCanvasWidth, finalCanvasHeight, config, logoImg);
+  drawWatermarkOverlays(ctx, finalCanvasWidth, finalCanvasHeight, config, logoImg, {
+    bannerHeight,
+    cardBorder,
+    cardBottom,
+  });
 }
 
 /**
@@ -170,8 +207,10 @@ export function drawWatermarkOverlays(
   canvasWidth: number,
   canvasHeight: number,
   config: WatermarkFullConfig,
-  logoImg?: HTMLImageElement | null
+  logoImg?: HTMLImageElement | null,
+  frameMetrics?: { bannerHeight?: number; cardBorder?: number; cardBottom?: number }
 ): void {
+  if (canvasWidth <= 0 || canvasHeight <= 0) return;
   const { frame, text, logo } = config;
 
   // 1. Gambar Frame Dekoratif
@@ -195,7 +234,10 @@ export function drawWatermarkOverlays(
       ctx.setLineDash([borderWidth * 3, borderWidth * 2]);
       ctx.strokeRect(inset, inset, canvasWidth - inset * 2, canvasHeight - inset * 2);
     } else if (frame.style === 'banner') {
-      const bannerHeight = Math.max(48, Math.round(canvasHeight * 0.08));
+      const bannerHeight =
+        frameMetrics?.bannerHeight && frameMetrics.bannerHeight > 0
+          ? frameMetrics.bannerHeight
+          : Math.max(48, Math.round(canvasHeight * 0.08));
       ctx.fillStyle = frame.borderColor || '#ffffff';
       ctx.fillRect(0, canvasHeight - bannerHeight, canvasWidth, bannerHeight);
 
@@ -207,14 +249,34 @@ export function drawWatermarkOverlays(
         ctx.textBaseline = 'middle';
         ctx.fillText(frame.metaText, canvasWidth / 2, canvasHeight - bannerHeight / 2);
       }
-    } else if (frame.style === 'card' && frame.metaText) {
-      ctx.fillStyle = frame.metaColor || '#0f172a';
-      const fontSize = Math.max(12, Math.round((frame.metaFontSize / 100) * canvasHeight));
-      ctx.font = `600 ${fontSize}px "Inter", sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      const bottomAreaCenter = canvasHeight - Math.round(canvasHeight * 0.08);
-      ctx.fillText(frame.metaText, canvasWidth / 2, bottomAreaCenter);
+    } else if (frame.style === 'card') {
+      const cardBorder =
+        frameMetrics?.cardBorder && frameMetrics.cardBorder > 0
+          ? frameMetrics.cardBorder
+          : borderWidth;
+      const cardBottom =
+        frameMetrics?.cardBottom && frameMetrics.cardBottom > 0
+          ? frameMetrics.cardBottom
+          : Math.round(canvasHeight * 0.14);
+
+      // Pastikan border polaroid tergambar pada mode social canvas (ketika kanvas tidak diperluas di awal)
+      if (!frameMetrics?.cardBottom) {
+        ctx.fillStyle = frame.borderColor || '#ffffff';
+        ctx.fillRect(0, 0, canvasWidth, cardBorder);
+        ctx.fillRect(0, 0, cardBorder, canvasHeight);
+        ctx.fillRect(canvasWidth - cardBorder, 0, cardBorder, canvasHeight);
+        ctx.fillRect(0, canvasHeight - cardBottom, canvasWidth, cardBottom);
+      }
+
+      if (frame.metaText) {
+        ctx.fillStyle = frame.metaColor || '#0f172a';
+        const fontSize = Math.max(12, Math.round((frame.metaFontSize / 100) * canvasHeight));
+        ctx.font = `600 ${fontSize}px "Inter", sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const bottomAreaCenter = canvasHeight - Math.round(cardBottom / 2);
+        ctx.fillText(frame.metaText, canvasWidth / 2, bottomAreaCenter);
+      }
     }
     ctx.restore();
   }
@@ -229,14 +291,17 @@ export function drawWatermarkOverlays(
     ctx.textBaseline = 'middle';
 
     const textMetrics = ctx.measureText(text.text);
-    const textWidth = textMetrics.width;
+    const textWidth = Number.isFinite(textMetrics.width) && textMetrics.width > 0 ? textMetrics.width : 0;
     const textHeight = computedFontSize;
 
-    ctx.globalAlpha = Math.max(0, Math.min(1, text.opacity));
+    ctx.globalAlpha = Math.max(0, Math.min(1, Number.isFinite(text.opacity) ? text.opacity : 0.85));
 
     if (text.tile) {
-      const angleRad = (text.rotation * Math.PI) / 180;
-      const step = Math.max(80, Math.round((text.tileSpacing / 100) * minDim * 0.7));
+      const angleRad = ((Number.isFinite(text.rotation) ? text.rotation : 0) * Math.PI) / 180;
+      const safeTileSpacing =
+        Number.isFinite(text.tileSpacing) && text.tileSpacing > 0 ? text.tileSpacing : 140;
+      const stepY = Math.max(60, Math.round((safeTileSpacing / 100) * minDim * 0.7));
+      const stepX = Math.max(60, Math.round(stepY + textWidth * 0.4));
 
       ctx.translate(canvasWidth / 2, canvasHeight / 2);
       ctx.rotate(angleRad);
@@ -248,8 +313,8 @@ export function drawWatermarkOverlays(
       const startY = -maxRadius;
       const endY = maxRadius * 2;
 
-      for (let y = startY; y < endY; y += step) {
-        for (let x = startX; x < endX; x += step + textWidth * 0.4) {
+      for (let y = startY; y < endY; y += stepY) {
+        for (let x = startX; x < endX; x += stepX) {
           drawSingleText(ctx, text.text, x, y, text);
         }
       }
@@ -271,42 +336,49 @@ export function drawWatermarkOverlays(
 
   // 3. Gambar Logo Watermark
   if (logo.enabled && logoImg) {
-    ctx.save();
-    const logoScale = Math.max(0.05, Math.min(0.8, logo.scale / 100));
-    const targetLogoWidth = Math.round(canvasWidth * logoScale);
-    const aspect = logoImg.height / logoImg.width;
-    const targetLogoHeight = Math.round(targetLogoWidth * aspect);
+    const rawLogoW = logoImg.naturalWidth || logoImg.width;
+    const rawLogoH = logoImg.naturalHeight || logoImg.height;
+    if (rawLogoW > 0 && rawLogoH > 0) {
+      ctx.save();
+      const safeScale = Number.isFinite(logo.scale) ? logo.scale : 18;
+      const logoScale = Math.max(0.05, Math.min(0.8, safeScale / 100));
+      const targetLogoWidth = Math.max(1, Math.round(canvasWidth * logoScale));
+      const aspect = rawLogoH / rawLogoW;
+      const targetLogoHeight = Math.max(1, Math.round(targetLogoWidth * aspect));
 
-    ctx.globalAlpha = Math.max(0, Math.min(1, logo.opacity));
+      ctx.globalAlpha = Math.max(0, Math.min(1, Number.isFinite(logo.opacity) ? logo.opacity : 0.9));
 
-    if (logo.tile) {
-      const step = Math.max(100, targetLogoWidth * 1.8);
-      const angleRad = (logo.rotation * Math.PI) / 180;
+      if (logo.tile) {
+        const safeLogoSpacing =
+          Number.isFinite(logo.tileSpacing) && logo.tileSpacing > 0 ? logo.tileSpacing : 180;
+        const step = Math.max(80, Math.round(targetLogoWidth * (safeLogoSpacing / 100)));
+        const angleRad = ((Number.isFinite(logo.rotation) ? logo.rotation : 0) * Math.PI) / 180;
 
-      ctx.translate(canvasWidth / 2, canvasHeight / 2);
-      ctx.rotate(angleRad);
-      ctx.translate(-canvasWidth / 2, -canvasHeight / 2);
+        ctx.translate(canvasWidth / 2, canvasHeight / 2);
+        ctx.rotate(angleRad);
+        ctx.translate(-canvasWidth / 2, -canvasHeight / 2);
 
-      const maxRadius = Math.sqrt(canvasWidth ** 2 + canvasHeight ** 2);
-      for (let y = -maxRadius; y < maxRadius * 2; y += step) {
-        for (let x = -maxRadius; x < maxRadius * 2; x += step) {
-          ctx.drawImage(logoImg, x, y, targetLogoWidth, targetLogoHeight);
+        const maxRadius = Math.sqrt(canvasWidth ** 2 + canvasHeight ** 2);
+        for (let y = -maxRadius; y < maxRadius * 2; y += step) {
+          for (let x = -maxRadius; x < maxRadius * 2; x += step) {
+            ctx.drawImage(logoImg, x, y, targetLogoWidth, targetLogoHeight);
+          }
         }
-      }
-    } else {
-      const coords = computeCoordinates(canvasWidth, canvasHeight, targetLogoWidth, targetLogoHeight, logo.position);
-      const centerX = coords.x + targetLogoWidth / 2;
-      const centerY = coords.y + targetLogoHeight / 2;
+      } else {
+        const coords = computeCoordinates(canvasWidth, canvasHeight, targetLogoWidth, targetLogoHeight, logo.position);
+        const centerX = coords.x + targetLogoWidth / 2;
+        const centerY = coords.y + targetLogoHeight / 2;
 
-      ctx.translate(centerX, centerY);
-      if (logo.rotation !== 0) {
-        ctx.rotate((logo.rotation * Math.PI) / 180);
-      }
-      ctx.translate(-centerX, -centerY);
+        ctx.translate(centerX, centerY);
+        if (logo.rotation !== 0) {
+          ctx.rotate((logo.rotation * Math.PI) / 180);
+        }
+        ctx.translate(-centerX, -centerY);
 
-      ctx.drawImage(logoImg, coords.x, coords.y, targetLogoWidth, targetLogoHeight);
+        ctx.drawImage(logoImg, coords.x, coords.y, targetLogoWidth, targetLogoHeight);
+      }
+      ctx.restore();
     }
-    ctx.restore();
   }
 }
 
@@ -324,8 +396,12 @@ export function drawWatermarkOnSocialCanvas(
   targetWidth = 720,
   targetHeight = 1280
 ): void {
-  canvas.width = targetWidth;
-  canvas.height = targetHeight;
+  if (canvas.width !== targetWidth) {
+    canvas.width = targetWidth;
+  }
+  if (canvas.height !== targetHeight) {
+    canvas.height = targetHeight;
+  }
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
@@ -378,28 +454,24 @@ function drawSingleText(
   y: number,
   textConfig: WatermarkFullConfig['text']
 ): void {
+  ctx.save();
   if (textConfig.shadow) {
-    ctx.save();
     ctx.shadowColor = textConfig.shadowColor || 'rgba(0,0,0,0.7)';
     ctx.shadowBlur = textConfig.shadowBlur || 6;
     ctx.shadowOffsetX = 2;
     ctx.shadowOffsetY = 2;
-    ctx.fillStyle = textConfig.color || '#ffffff';
-    ctx.fillText(str, x, y);
-    ctx.restore();
   }
 
   if (textConfig.stroke) {
-    ctx.save();
     ctx.strokeStyle = textConfig.strokeColor || '#000000';
     ctx.lineWidth = textConfig.strokeWidth || 2;
     ctx.lineJoin = 'round';
     ctx.strokeText(str, x, y);
-    ctx.restore();
   }
 
   ctx.fillStyle = textConfig.color || '#ffffff';
   ctx.fillText(str, x, y);
+  ctx.restore();
 }
 
 /**
@@ -411,6 +483,10 @@ export function exportCanvasToBlob(
   quality = 0.92
 ): Promise<Blob> {
   return new Promise((resolve, reject) => {
+    if (canvas.width <= 0 || canvas.height <= 0) {
+      reject(new Error('Dimensi canvas tidak valid (lebar atau tinggi 0).'));
+      return;
+    }
     canvas.toBlob(
       (blob) => {
         if (blob) {
@@ -429,10 +505,12 @@ export function exportCanvasToBlob(
  * Memicu download file lokal di browser
  */
 export function triggerFileDownload(blob: Blob, filename: string): void {
+  if (typeof document === 'undefined') return;
+  const safeFilename = filename.replace(/[/\\?%*:|"<>]/g, '_');
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = filename;
+  anchor.download = safeFilename;
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);
@@ -679,15 +757,168 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
     await ensureFontLoadedAsync(config.text.fontFamily);
   }
 
+  // Pastikan elemen video tidak di-suspend oleh optimasi background decoder browser (opacity: 0 / z-index negatif / offscreen)
+  const videoStyle = (videoElement as unknown as { style?: Partial<CSSStyleDeclaration> }).style;
+  const savedStyle = videoStyle
+    ? {
+        opacity: videoStyle.opacity,
+        zIndex: videoStyle.zIndex,
+        top: videoStyle.top,
+        left: videoStyle.left,
+        bottom: videoStyle.bottom,
+        right: videoStyle.right,
+        width: videoStyle.width,
+        height: videoStyle.height,
+        position: videoStyle.position,
+        pointerEvents: videoStyle.pointerEvents,
+      }
+    : null;
+
+  const restoreVideoStyle = () => {
+    if (videoStyle && savedStyle) {
+      videoStyle.opacity = savedStyle.opacity;
+      videoStyle.zIndex = savedStyle.zIndex;
+      videoStyle.top = savedStyle.top;
+      videoStyle.left = savedStyle.left;
+      videoStyle.bottom = savedStyle.bottom;
+      videoStyle.right = savedStyle.right;
+      videoStyle.width = savedStyle.width;
+      videoStyle.height = savedStyle.height;
+      videoStyle.position = savedStyle.position;
+      videoStyle.pointerEvents = savedStyle.pointerEvents;
+    }
+  };
+
+  if (videoStyle) {
+    if (!videoStyle.opacity || Number(videoStyle.opacity) <= 0) {
+      videoStyle.opacity = '0.05';
+    } else if (Number(videoStyle.opacity) < 0.05) {
+      videoStyle.opacity = '0.05';
+    }
+    if (!videoStyle.zIndex || Number(videoStyle.zIndex) < 0) {
+      videoStyle.zIndex = '50';
+    }
+    if (videoStyle.top === '-9999px' || videoStyle.left === '-9999px') {
+      videoStyle.top = 'auto';
+      videoStyle.left = 'auto';
+      videoStyle.bottom = '0px';
+      videoStyle.right = '0px';
+    }
+    const currentW = Number.parseInt(String(videoStyle.width || '0'), 10);
+    if (!videoStyle.width || currentW < 64) {
+      videoStyle.width = '64px';
+    }
+    const currentH = Number.parseInt(String(videoStyle.height || '0'), 10);
+    if (!videoStyle.height || currentH < 64) {
+      videoStyle.height = '64px';
+    }
+  }
+
+  // Pastikan data frame video sudah siap sebelum menggambar ke canvas
+  if (typeof videoElement.readyState === 'number' && videoElement.readyState < 2) {
+    if (videoElement.preload !== 'auto') {
+      videoElement.preload = 'auto';
+    }
+    await new Promise<void>((resolve) => {
+      let settled = false;
+      const onReady = () => {
+        if (!settled) {
+          settled = true;
+          videoElement.removeEventListener('loadeddata', onReady);
+          videoElement.removeEventListener('canplay', onReady);
+          resolve();
+        }
+      };
+      videoElement.addEventListener('loadeddata', onReady, { once: true });
+      videoElement.addEventListener('canplay', onReady, { once: true });
+      if (videoElement.readyState === 0 && typeof videoElement.load === 'function') {
+        try {
+          videoElement.load();
+        } catch {
+          // Abaikan pada environment mock
+        }
+      }
+      setTimeout(onReady, 5000);
+    });
+  }
+
+  const actualWidth = sourceWidth > 0 ? sourceWidth : videoElement.videoWidth || 1280;
+  const actualHeight = sourceHeight > 0 ? sourceHeight : videoElement.videoHeight || 720;
+
   // Persiapkan canvas offscreen
   const offscreenCanvas = document.createElement('canvas');
-  drawWatermarkOnCanvas(offscreenCanvas, videoElement, sourceWidth, sourceHeight, config, logoImg);
+  drawWatermarkOnCanvas(offscreenCanvas, videoElement, actualWidth, actualHeight, config, logoImg);
+
+  const finalCanvasWidth = offscreenCanvas.width || actualWidth;
+  const finalCanvasHeight = offscreenCanvas.height || actualHeight;
+
+  let mediaDrawX = 0;
+  let mediaDrawY = 0;
+  const mediaDrawWidth = actualWidth;
+  const mediaDrawHeight = actualHeight;
+  let bannerHeight = 0;
+  let cardBorder = 0;
+  let cardBottom = 0;
+
+  if (config.frame.enabled && config.frame.style === 'banner') {
+    bannerHeight = Math.max(48, Math.round(actualHeight * 0.08));
+  } else if (config.frame.enabled && config.frame.style === 'card') {
+    cardBorder = Math.max(1, Math.round(actualWidth * (config.frame.borderWidth / 100)));
+    cardBottom = Math.round(actualHeight * 0.16);
+    mediaDrawX = cardBorder;
+    mediaDrawY = cardBorder;
+  }
+
+  // Pre-render static watermark overlay sekali saja untuk membebaskan CPU dari re-measuring text & tile loop di tiap frame
+  let overlayCanvas: HTMLCanvasElement | null = null;
+  if (typeof document !== 'undefined') {
+    try {
+      overlayCanvas = document.createElement('canvas');
+      overlayCanvas.width = finalCanvasWidth;
+      overlayCanvas.height = finalCanvasHeight;
+      const overlayCtx = overlayCanvas.getContext('2d');
+      if (overlayCtx) {
+        applyPristineCanvasSmoothing(overlayCtx);
+        drawWatermarkOverlays(overlayCtx, finalCanvasWidth, finalCanvasHeight, config, logoImg, {
+          bannerHeight,
+          cardBorder,
+          cardBottom,
+        });
+      }
+    } catch {
+      overlayCanvas = null;
+    }
+  }
+
+  const offscreenCtx = offscreenCanvas.getContext('2d');
+  if (offscreenCtx) {
+    offscreenCtx.imageSmoothingEnabled = true;
+    offscreenCtx.imageSmoothingQuality = 'medium';
+  }
+
+  const renderFastVideoFrame = () => {
+    if (!offscreenCtx) {
+      drawWatermarkOnCanvas(offscreenCanvas, videoElement, actualWidth, actualHeight, config, logoImg);
+      return;
+    }
+    if (overlayCanvas) {
+      if (config.frame.enabled && config.frame.style === 'card') {
+        offscreenCtx.fillStyle = config.frame.borderColor || '#ffffff';
+        offscreenCtx.fillRect(0, 0, finalCanvasWidth, finalCanvasHeight);
+      }
+      offscreenCtx.drawImage(videoElement, mediaDrawX, mediaDrawY, mediaDrawWidth, mediaDrawHeight);
+      offscreenCtx.drawImage(overlayCanvas, 0, 0);
+    } else {
+      drawWatermarkOnCanvas(offscreenCanvas, videoElement, actualWidth, actualHeight, config, logoImg);
+    }
+  };
 
   const captureStreamFn =
     offscreenCanvas.captureStream ||
     (offscreenCanvas as unknown as { mozCaptureStream?: (fps?: number) => MediaStream }).mozCaptureStream;
 
   if (typeof captureStreamFn !== 'function') {
+    restoreVideoStyle();
     throw new Error('Browser Anda tidak mendukung captureStream pada Canvas.');
   }
 
@@ -695,6 +926,7 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
 
   // Ambil audio track asli dari elemen video jika tersedia
   let audioTracks: MediaStreamTrack[] = [];
+  let sourceVideoStream: MediaStream | null = null;
   try {
     const vStreamFn =
       (videoElement as unknown as { captureStream?: () => MediaStream }).captureStream ||
@@ -702,14 +934,46 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
     if (typeof vStreamFn === 'function') {
       const vStream = vStreamFn.call(videoElement);
       if (vStream) {
+        sourceVideoStream = vStream;
         audioTracks = vStream.getAudioTracks();
+        // Hentikan video tracks dari stream sumber segera agar GPU/decoder tidak memproses video ganda
+        if (typeof vStream.getVideoTracks === 'function') {
+          vStream.getVideoTracks().forEach((track) => track.stop());
+        }
       }
     }
   } catch (err) {
     console.warn('Gagal menangkap audio track dari video source:', err);
   }
 
-  const combinedTracks: MediaStreamTrack[] = [canvasStream.getVideoTracks()[0], ...audioTracks];
+  const stopAllStreams = () => {
+    canvasStream.getTracks().forEach((track) => track.stop());
+    audioTracks.forEach((track) => track.stop());
+    if (sourceVideoStream && typeof sourceVideoStream.getVideoTracks === 'function') {
+      sourceVideoStream.getVideoTracks().forEach((track) => track.stop());
+    }
+  };
+
+  const videoTracks = canvasStream.getVideoTracks();
+  if (!videoTracks || videoTracks.length === 0) {
+    stopAllStreams();
+    restoreVideoStyle();
+    throw new Error('Gagal menangkap video track dari Canvas stream.');
+  }
+  const videoTrack = videoTracks[0] as MediaStreamTrack & { requestFrame?: () => void };
+  videoTrack.enabled = true;
+
+  const flushCanvasFrame = () => {
+    if (typeof videoTrack.requestFrame === 'function') {
+      try {
+        videoTrack.requestFrame();
+      } catch {
+        // Abaikan jika stream belum aktif atau sudah ditutup
+      }
+    }
+  };
+
+  const combinedTracks: MediaStreamTrack[] = [videoTrack, ...audioTracks];
   const recordingStream = new MediaStream(combinedTracks);
 
   // Tentukan MIME type yang didukung dengan memprioritaskan format yang diminta
@@ -746,6 +1010,8 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
   }
 
   if (!chosenMime && typeof MediaRecorder === 'undefined') {
+    stopAllStreams();
+    restoreVideoStyle();
     throw new Error('MediaRecorder tidak didukung di lingkungan peramban ini.');
   }
 
@@ -754,7 +1020,7 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
     qualityPreset ||
     (qualityProfile === 'optimal' ? 'standard' : qualityProfile) ||
     'maximum';
-  const bitrateConfig = calculateAdaptiveVideoBitrate(sourceWidth, sourceHeight, fps, chosenPreset);
+  const bitrateConfig = calculateAdaptiveVideoBitrate(actualWidth, actualHeight, fps, chosenPreset);
 
   const chunks: BlobPart[] = [];
   const recorderOptions: MediaRecorderOptions = {
@@ -765,7 +1031,14 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
     recorderOptions.mimeType = chosenMime;
   }
 
-  const recorder = new MediaRecorder(recordingStream, recorderOptions);
+  let recorder: MediaRecorder;
+  try {
+    recorder = new MediaRecorder(recordingStream, recorderOptions);
+  } catch (err) {
+    stopAllStreams();
+    restoreVideoStyle();
+    throw err;
+  }
 
   recorder.ondataavailable = (e) => {
     if (e.data && e.data.size > 0) {
@@ -773,7 +1046,8 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
     }
   };
 
-  const totalDuration = duration > 0 ? duration : videoElement.duration || 1;
+  const rawDuration = duration > 0 ? duration : videoElement.duration || 1;
+  const totalDuration = Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : 1;
 
   // Simpan state video sebelumnya
   const prevTime = videoElement.currentTime;
@@ -788,6 +1062,7 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
 
     let animFrameId: number | null = null;
     let rvfcHandle: number | null = null;
+    let frameFallbackTimer: ReturnType<typeof setTimeout> | null = null;
     let safetyTimer: ReturnType<typeof setTimeout> | null = null;
     let isFinished = false;
 
@@ -804,6 +1079,10 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
         videoElement.cancelVideoFrameCallback(rvfcHandle);
         rvfcHandle = null;
       }
+      if (frameFallbackTimer !== null) {
+        clearTimeout(frameFallbackTimer);
+        frameFallbackTimer = null;
+      }
       if (safetyTimer !== null) {
         clearTimeout(safetyTimer);
         safetyTimer = null;
@@ -811,23 +1090,65 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
     };
 
     const scheduleNextFrame = (cb: () => void) => {
+      let executed = false;
+      const executeOnce = () => {
+        if (executed) return;
+        executed = true;
+        if (rvfcHandle !== null && typeof videoElement.cancelVideoFrameCallback === 'function') {
+          videoElement.cancelVideoFrameCallback(rvfcHandle);
+          rvfcHandle = null;
+        }
+        if (animFrameId !== null) {
+          if (typeof cancelAnimationFrame === 'function') {
+            cancelAnimationFrame(animFrameId);
+          } else {
+            clearTimeout(animFrameId);
+          }
+          animFrameId = null;
+        }
+        if (frameFallbackTimer !== null) {
+          clearTimeout(frameFallbackTimer);
+          frameFallbackTimer = null;
+        }
+        cb();
+      };
+
       if (hasRVFC && typeof videoElement.requestVideoFrameCallback === 'function') {
-        rvfcHandle = videoElement.requestVideoFrameCallback(() => cb());
+        rvfcHandle = videoElement.requestVideoFrameCallback(() => executeOnce());
       } else if (typeof requestAnimationFrame === 'function') {
-        animFrameId = requestAnimationFrame(() => cb());
-      } else {
-        animFrameId = setTimeout(() => cb(), 1000 / fps) as unknown as number;
+        animFrameId = requestAnimationFrame(() => executeOnce());
       }
+
+      // Gunakan fallback adaptif (2x durasi frame) saat RVFC aktif agar tidak menggantung tanpa stall 100ms
+      const fallbackDelay = hasRVFC
+        ? Math.max(50, Math.round(1000 / fps) * 2)
+        : Math.max(16, Math.round(1000 / fps));
+      frameFallbackTimer = setTimeout(() => executeOnce(), fallbackDelay);
+    };
+
+    let initialSeekTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const cancelInitialSeek = () => {
+      if (initialSeekTimer !== null) {
+        clearTimeout(initialSeekTimer);
+        initialSeekTimer = null;
+      }
+      videoElement.removeEventListener('seeked', onSeekedInitial);
     };
 
     const cleanup = () => {
       if (isCleanedUp) return;
       isCleanedUp = true;
       cancelScheduledFrame();
+      cancelInitialSeek();
+      if (signal) {
+        signal.removeEventListener('abort', handleAbort);
+      }
       videoElement.removeEventListener('ended', finishRecording);
       videoElement.removeEventListener('timeupdate', onTimeUpdate);
       combinedTracks.forEach((track) => track.stop());
-      canvasStream.getTracks().forEach((track) => track.stop());
+      stopAllStreams();
+      restoreVideoStyle();
       videoElement.muted = prevMuted;
       videoElement.volume = prevVolume;
       videoElement.currentTime = prevTime;
@@ -840,8 +1161,11 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
       if (isFinished) return;
       isFinished = true;
       cancelScheduledFrame();
+      cancelInitialSeek();
       videoElement.removeEventListener('ended', finishRecording);
       videoElement.removeEventListener('timeupdate', onTimeUpdate);
+      renderFastVideoFrame();
+      flushCanvasFrame();
       videoElement.pause();
       onProgress?.({ percent: 100, currentTime: totalDuration, totalTime: totalDuration });
       if (recorder.state !== 'inactive') {
@@ -849,8 +1173,10 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
       }
     };
 
+    const endThreshold = totalDuration > 0.2 ? totalDuration - 0.03 : totalDuration;
+
     const onTimeUpdate = () => {
-      if (videoElement.currentTime >= totalDuration - 0.1 || videoElement.ended) {
+      if (videoElement.currentTime >= endThreshold || videoElement.ended) {
         finishRecording();
       }
     };
@@ -859,8 +1185,10 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
       if (isFinished) return;
       isFinished = true;
       cancelScheduledFrame();
+      cancelInitialSeek();
       videoElement.removeEventListener('ended', finishRecording);
       videoElement.removeEventListener('timeupdate', onTimeUpdate);
+      recorder.onstop = null;
       if (recorder.state !== 'inactive') {
         recorder.stop();
       }
@@ -874,9 +1202,6 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
     }
 
     recorder.onstop = () => {
-      if (signal) {
-        signal.removeEventListener('abort', handleAbort);
-      }
       cleanup();
       if (!signal?.aborted) {
         const finalBlob = new Blob(chunks, { type: chosenMime || mimeType || 'video/mp4' });
@@ -885,9 +1210,8 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
     };
 
     recorder.onerror = (e) => {
-      if (signal) {
-        signal.removeEventListener('abort', handleAbort);
-      }
+      isFinished = true;
+      recorder.onstop = null;
       cleanup();
       reject(new Error(`MediaRecorder error: ${String(e)}`));
     };
@@ -896,23 +1220,40 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
     videoElement.addEventListener('ended', finishRecording, { once: true });
     videoElement.addEventListener('timeupdate', onTimeUpdate);
 
+    const failPlayback = (playErr: unknown) => {
+      isFinished = true;
+      recorder.onstop = null;
+      if (recorder.state !== 'inactive') {
+        recorder.stop();
+      }
+      cleanup();
+      reject(new Error(`Gagal memutar video untuk rendering: ${String(playErr)}`));
+    };
+
     const onSeekedInitial = async () => {
+      cancelInitialSeek();
       if (signal?.aborted) {
         handleAbort();
         return;
       }
 
-      // Mulai rekam
+      renderFastVideoFrame();
+      flushCanvasFrame();
+
+      // Mulai rekam dengan 500ms chunking untuk menjaga buffer muxer tetap lancar
       try {
-        recorder.start(100);
+        recorder.start(500);
       } catch (err) {
+        isFinished = true;
+        recorder.onstop = null;
         cleanup();
         reject(err);
         return;
       }
 
       // Fallback safety timer: prevents infinite hang if browser drops frames or suspends RVFC
-      const safetyLimitMs = Math.max(3000, Math.round((totalDuration + 2.5) * 1000));
+      const rawLimitMs = Math.round((totalDuration + 2.5) * 1000);
+      const safetyLimitMs = Math.min(3600000, Math.max(3000, Number.isFinite(rawLimitMs) ? rawLimitMs : 3000));
       safetyTimer = setTimeout(() => {
         if (!isFinished && !signal?.aborted) {
           finishRecording();
@@ -928,18 +1269,26 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
             videoElement.muted = true;
             await videoElement.play();
           } catch (retryErr) {
-            recorder.stop();
-            cleanup();
-            reject(new Error(`Gagal memutar video untuk rendering: ${String(retryErr)}`));
+            failPlayback(retryErr);
             return;
           }
         } else {
-          recorder.stop();
-          cleanup();
-          reject(new Error(`Gagal memutar video untuk rendering: ${String(err)}`));
+          failPlayback(err);
           return;
         }
       }
+
+      if (signal?.aborted || isFinished) {
+        if (signal?.aborted) handleAbort();
+        return;
+      }
+
+      // Segera gambar frame aktif setelah playback dimulai
+      renderFastVideoFrame();
+      flushCanvasFrame();
+
+      let lastProgressTime = 0;
+      let lastProgressPercent = -1;
 
       // Loop rendering frame demi frame dengan requestVideoFrameCallback / requestAnimationFrame
       const renderLoop = () => {
@@ -948,13 +1297,21 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
           return;
         }
 
-        drawWatermarkOnCanvas(offscreenCanvas, videoElement, sourceWidth, sourceHeight, config, logoImg);
+        renderFastVideoFrame();
+        flushCanvasFrame();
 
         const curTime = videoElement.currentTime;
-        const percent = Math.min(100, Math.round((curTime / totalDuration) * 100));
-        onProgress?.({ percent, currentTime: curTime, totalTime: totalDuration });
+        const percent = totalDuration > 0
+          ? Math.min(100, Math.max(0, Math.round((curTime / totalDuration) * 100)))
+          : 0;
+        const now = Date.now();
+        if (now - lastProgressTime >= 120 || percent !== lastProgressPercent || curTime >= endThreshold) {
+          lastProgressTime = now;
+          lastProgressPercent = percent;
+          onProgress?.({ percent, currentTime: curTime, totalTime: totalDuration });
+        }
 
-        if (curTime >= totalDuration - 0.1 || videoElement.ended) {
+        if (curTime >= endThreshold || videoElement.ended) {
           finishRecording();
           return;
         }
@@ -970,6 +1327,9 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
       onSeekedInitial();
     } else {
       videoElement.addEventListener('seeked', onSeekedInitial, { once: true });
+      initialSeekTimer = setTimeout(() => {
+        onSeekedInitial();
+      }, 3000);
       videoElement.currentTime = 0;
     }
   });
