@@ -740,7 +740,7 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
     duration,
     config,
     logoImg,
-    fps = 30,
+    fps = 60,
     mimeType,
     qualityPreset,
     qualityProfile,
@@ -790,27 +790,25 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
   };
 
   if (videoStyle) {
-    if (!videoStyle.opacity || Number(videoStyle.opacity) <= 0) {
-      videoStyle.opacity = '0.05';
-    } else if (Number(videoStyle.opacity) < 0.05) {
-      videoStyle.opacity = '0.05';
+    if (!videoStyle.opacity || Number(videoStyle.opacity) <= 0 || Number(videoStyle.opacity) < 0.9) {
+      videoStyle.opacity = '1';
     }
-    if (!videoStyle.zIndex || Number(videoStyle.zIndex) < 0) {
-      videoStyle.zIndex = '50';
+    if (!videoStyle.zIndex || Number(videoStyle.zIndex) < 1) {
+      videoStyle.zIndex = '1';
     }
     if (videoStyle.top === '-9999px' || videoStyle.left === '-9999px') {
-      videoStyle.top = 'auto';
-      videoStyle.left = 'auto';
-      videoStyle.bottom = '0px';
-      videoStyle.right = '0px';
+      videoStyle.top = '0px';
+      videoStyle.left = '0px';
+      videoStyle.bottom = 'auto';
+      videoStyle.right = 'auto';
     }
     const currentW = Number.parseInt(String(videoStyle.width || '0'), 10);
-    if (!videoStyle.width || currentW < 64) {
-      videoStyle.width = '64px';
+    if (!videoStyle.width || currentW < 2) {
+      videoStyle.width = '2px';
     }
     const currentH = Number.parseInt(String(videoStyle.height || '0'), 10);
-    if (!videoStyle.height || currentH < 64) {
-      videoStyle.height = '64px';
+    if (!videoStyle.height || currentH < 2) {
+      videoStyle.height = '2px';
     }
   }
 
@@ -1260,6 +1258,13 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
         }
       }, safetyLimitMs);
 
+      // Pastikan laju pemutaran video tepat 1.0x (normal speed) tanpa perlambatan
+      try {
+        videoElement.playbackRate = 1.0;
+      } catch {
+        // Abaikan jika tidak didukung mock
+      }
+
       // Mulai playback video (dengan fallback muting jika diblokir Autoplay Policy)
       try {
         await videoElement.play();
@@ -1298,7 +1303,6 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
         }
 
         renderFastVideoFrame();
-        flushCanvasFrame();
 
         const curTime = videoElement.currentTime;
         const percent = totalDuration > 0

@@ -114,6 +114,8 @@ export interface VideoBitrateConfig {
   audioBitsPerSecond: number;
 }
 
+export type VideoFpsPreset = 30 | 60;
+
 export interface ExportSettings {
   format: ExportFormat;
   videoFormat: VideoContainerFormat;
@@ -121,6 +123,7 @@ export interface ExportSettings {
   quality: number; // 0.1 to 1.0
   videoQuality?: VideoQualityPreset;
   videoQualityProfile?: VideoQualityPreset;
+  videoFps?: VideoFpsPreset;
   customPrefix: string;
 }
 

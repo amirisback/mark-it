@@ -215,17 +215,39 @@ export function ExportBar({
                   </select>
                 </div>
 
+                {/* Video Frame Rate Selector */}
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold text-foreground/90 text-xs">FPS:</span>
+                  <select
+                    value={settings.videoFps || 60}
+                    onChange={(e) => {
+                      const f = Number(e.target.value) as 30 | 60;
+                      onSettingsChange({
+                        ...settings,
+                        videoFps: f,
+                      });
+                    }}
+                    aria-label="Pilih frame rate video ekspor"
+                    className="h-8 px-2.5 py-1 rounded-lg border border-border bg-background text-xs font-medium text-foreground shadow-2xs focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                  >
+                    <option value={60}>60 FPS (Sangat Mulus & Cepat)</option>
+                    <option value={30}>30 FPS (Standar)</option>
+                  </select>
+                </div>
+
                 {/* Dynamic Bitrate & Resolution Indicator Badge */}
                 {sourceWidth && sourceHeight ? (
                   <div
                     role="status"
-                    aria-label={`Resolusi ${resCategory}, bitrate ${bitrateMbps} megabit per detik, audio 256 kilobit per detik`}
+                    aria-label={`Resolusi ${resCategory}, frame rate ${settings.videoFps || 60} FPS, bitrate ${bitrateMbps} megabit per detik, audio 256 kilobit per detik`}
                     className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20 font-mono text-[11px] font-medium tracking-tight shadow-2xs"
                   >
                     <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 dark:bg-indigo-400 animate-pulse" />
                     <span>
                       {resCategory} ({sourceWidth}×{sourceHeight})
                     </span>
+                    <span className="text-muted-foreground/60">•</span>
+                    <span>{settings.videoFps || 60} FPS</span>
                     <span className="text-muted-foreground/60">•</span>
                     <span className="font-bold">{bitrateMbps} Mbps</span>
                     <span className="text-muted-foreground/60">•</span>

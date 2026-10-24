@@ -860,6 +860,122 @@ describe('Watermark Engine & Font Utilities', () => {
         (globalThis as unknown as { MediaRecorder?: unknown }).MediaRecorder = origMediaRecorder;
       }
     });
+
+    it('should enforce playbackRate 1.0 and captureStream with target 60 fps to preserve video speed', async () => {
+      let passedCaptureFps: number | undefined;
+      let recordedPlaybackRate: number | undefined;
+
+      const listeners: Record<string, ((e?: Event) => void)[]> = {};
+      const fakeVideo = {
+        videoWidth: 1280,
+        videoHeight: 720,
+        currentTime: 0,
+        duration: 0.5,
+        muted: false,
+        volume: 1,
+        paused: false,
+        playbackRate: 0.5, // Start with altered playbackRate
+        play: () => {
+          recordedPlaybackRate = fakeVideo.playbackRate;
+          return Promise.resolve();
+        },
+        pause: () => {},
+        addEventListener: (event: string, fn: (e?: Event) => void) => {
+          listeners[event] = listeners[event] || [];
+          listeners[event].push(fn);
+        },
+        removeEventListener: (event: string, fn: (e?: Event) => void) => {
+          if (listeners[event]) listeners[event] = listeners[event].filter((f) => f !== fn);
+        },
+        captureStream: () => ({
+          getAudioTracks: () => [],
+        }),
+      } as unknown as HTMLVideoElement;
+
+      const fakeCanvas = {
+        width: 1280,
+        height: 720,
+        getContext: () => ({
+          imageSmoothingEnabled: true,
+          imageSmoothingQuality: 'medium',
+          clearRect: () => {},
+          drawImage: () => {},
+          save: () => {},
+          restore: () => {},
+          measureText: () => ({ width: 100 }),
+          fillText: () => {},
+          strokeText: () => {},
+          translate: () => {},
+          rotate: () => {},
+          fillRect: () => {},
+          strokeRect: () => {},
+        }),
+        captureStream: (targetFps?: number) => {
+          passedCaptureFps = targetFps;
+          return {
+            getVideoTracks: () => [{ enabled: true, stop: () => {}, requestFrame: () => {} }],
+            getTracks: () => [{ enabled: true, stop: () => {} }],
+          };
+        },
+      };
+
+      const origDoc = (globalThis as unknown as { document?: unknown }).document;
+      const origMediaStream = (globalThis as unknown as { MediaStream?: unknown }).MediaStream;
+      const origMediaRecorder = (globalThis as unknown as { MediaRecorder?: unknown }).MediaRecorder;
+
+      (globalThis as unknown as { document: unknown }).document = {
+        createElement: (tag: string) => (tag === 'canvas' ? fakeCanvas : {}),
+        fonts: { check: () => true, load: async () => [] },
+      };
+
+      class MockMediaStream {
+        tracks: unknown[];
+        constructor(tracks: unknown[] = []) {
+          this.tracks = tracks;
+        }
+        getTracks() {
+          return this.tracks;
+        }
+      }
+
+      class MockMediaRecorder {
+        static isTypeSupported = () => true;
+        state = 'recording';
+        ondataavailable: ((e: { data: Blob }) => void) | null = null;
+        onstop: (() => void) | null = null;
+        start() {}
+        stop() {
+          this.state = 'inactive';
+          if (this.onstop) this.onstop();
+        }
+      }
+
+      (globalThis as unknown as { MediaStream?: unknown }).MediaStream = MockMediaStream;
+      (globalThis as unknown as { MediaRecorder?: unknown }).MediaRecorder = MockMediaRecorder;
+
+      try {
+        const promise = exportWatermarkedVideoAsync({
+          videoElement: fakeVideo,
+          sourceWidth: 1280,
+          sourceHeight: 720,
+          duration: 0.5,
+          config: DEFAULT_WATERMARK_CONFIG,
+        });
+
+        setTimeout(() => {
+          if (listeners['ended']) listeners['ended'].forEach((fn) => fn());
+        }, 15);
+
+        await promise;
+
+        expect(recordedPlaybackRate).toBe(1.0);
+        expect(passedCaptureFps).toBe(60);
+      } finally {
+        (globalThis as unknown as { document?: unknown }).document = origDoc;
+        (globalThis as unknown as { MediaStream?: unknown }).MediaStream = origMediaStream;
+        (globalThis as unknown as { MediaRecorder?: unknown }).MediaRecorder = origMediaRecorder;
+      }
+    });
   });
 
   describe('drawWatermarkOnCanvas & drawWatermarkOnSocialCanvas - Frame & Safety Guards', () => {

@@ -35,6 +35,7 @@ export function StudioWorkspace() {
     quality: 0.95,
     videoQuality: 'maximum',
     videoQualityProfile: 'maximum',
+    videoFps: 60,
     customPrefix: 'watermarked_',
   });
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -399,6 +400,7 @@ export function StudioWorkspace() {
             duration: activeItem.duration || videoEl.duration || 0,
             config,
             logoImg,
+            fps: exportSettings.videoFps || 60,
             mimeType: exportSettings.videoFormat,
             qualityPreset:
               exportSettings.videoQuality || exportSettings.videoQualityProfile || 'maximum',
@@ -619,13 +621,13 @@ export function StudioWorkspace() {
             tempVideo.preload = 'auto';
             tempVideo.playsInline = true;
             tempVideo.style.position = 'fixed';
-            tempVideo.style.bottom = '0px';
-            tempVideo.style.right = '0px';
-            tempVideo.style.width = '64px';
-            tempVideo.style.height = '64px';
-            tempVideo.style.opacity = '0.05';
+            tempVideo.style.top = '0px';
+            tempVideo.style.left = '0px';
+            tempVideo.style.width = '2px';
+            tempVideo.style.height = '2px';
+            tempVideo.style.opacity = '1';
             tempVideo.style.pointerEvents = 'none';
-            tempVideo.style.zIndex = '50';
+            tempVideo.style.zIndex = '1';
             document.body.appendChild(tempVideo);
 
             try {
@@ -699,6 +701,7 @@ export function StudioWorkspace() {
                 duration: item.duration || tempVideo.duration || 0,
                 config,
                 logoImg,
+                fps: exportSettings.videoFps || 60,
                 mimeType: exportSettings.videoFormat,
                 qualityPreset:
                   exportSettings.videoQuality || exportSettings.videoQualityProfile || 'maximum',

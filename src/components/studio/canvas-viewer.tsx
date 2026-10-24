@@ -679,7 +679,7 @@ export function CanvasViewer({
           zoomLevel > 100 ? 'overflow-auto' : 'overflow-hidden'
         } canvas-checkerboard flex items-center justify-center p-3 sm:p-4`}
       >
-        {/* Active offscreen video decoder element (kept at opacity >= 0.05 & 64x64px to prevent Chromium compositor occlusion culling) */}
+        {/* Active offscreen video decoder element (kept at opacity 1 & 2x2px fixed to prevent Chromium compositor occlusion culling) */}
         <video
           ref={videoRef}
           preload="auto"
@@ -688,12 +688,12 @@ export function CanvasViewer({
           className="pointer-events-none select-none"
           style={{
             position: 'fixed',
-            bottom: 0,
-            right: 0,
-            width: '64px',
-            height: '64px',
-            opacity: 0.05,
-            zIndex: 50,
+            top: 0,
+            left: 0,
+            width: '2px',
+            height: '2px',
+            opacity: 1,
+            zIndex: 1,
             pointerEvents: 'none',
           }}
           aria-hidden="true"
