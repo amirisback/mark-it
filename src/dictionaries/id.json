@@ -146,6 +146,25 @@
       "offsetX": "Offset Horisontal (X)",
       "offsetY": "Offset Vertikal (Y)"
     },
+    "motion": {
+      "enable": "Aktifkan Watermark Bergerak",
+      "subtitle": "Proteksi anti-AI inpainting untuk media video",
+      "pattern": "Pola Gerakan",
+      "drift": "Melayang Berombak",
+      "bounce": "Memantul",
+      "jump": "Lompat Sudut",
+      "speed": "Kecepatan",
+      "slow": "Lambat",
+      "medium": "Sedang",
+      "fast": "Cepat"
+    },
+    "metadata": {
+      "title": "EXIF & Hak Cipta Gambar",
+      "enable": "Sematkan Hak Cipta EXIF",
+      "artist": "Fotografer / Author",
+      "copyright": "Pernyataan Hak Cipta",
+      "description": "Deskripsi Gambar"
+    },
     "presets": {
       "title": "Pilihan Preset Instan",
       "subtitle": "Terapkan konfigurasi siap pakai dengan satu kali klik.",

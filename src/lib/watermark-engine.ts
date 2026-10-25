@@ -6,6 +6,9 @@ import type {
   VideoQualityPreset,
   VideoQualityProfile,
   VideoBitrateConfig,
+  MovingWatermarkConfig,
+  ImageMetadataConfig,
+  VideoEngineMode,
 } from '@/types/watermark';
 
 /**
@@ -30,6 +33,9 @@ export function applyPristineCanvasSmoothing(ctx: CanvasRenderingContext2D): voi
  * Memuat gambar secara asynchronous hingga benar-benar ter-decode
  */
 export function loadImageAsync(src: string): Promise<HTMLImageElement> {
+  if (!src || typeof src !== 'string' || !src.trim()) {
+    return Promise.reject(new Error('URL gambar tidak valid atau kosong.'));
+  }
   return new Promise((resolve, reject) => {
     const img = new Image();
     let isSettled = false;
@@ -130,6 +136,108 @@ export function computeCoordinates(
 }
 
 /**
+ * Menghitung koordinat dinamis untuk Watermark Bergerak (Anti-AI Removal)
+ */
+export function computeMovingCoordinates(
+  mediaWidth: number,
+  mediaHeight: number,
+  contentWidth: number,
+  contentHeight: number,
+  basePos: PositionConfig,
+  movingConfig: MovingWatermarkConfig,
+  timeSeconds = 0
+): { x: number; y: number } {
+  if (
+    !Number.isFinite(mediaWidth) ||
+    mediaWidth <= 0 ||
+    !Number.isFinite(mediaHeight) ||
+    mediaHeight <= 0
+  ) {
+    return { x: 0, y: 0 };
+  }
+
+  const paddingX = mediaWidth * 0.03;
+  const paddingY = mediaHeight * 0.03;
+  const minX = paddingX;
+  const maxX = Math.max(minX, mediaWidth - contentWidth - paddingX);
+  const minY = paddingY;
+  const maxY = Math.max(minY, mediaHeight - contentHeight - paddingY);
+
+  const t = Math.max(0, Number.isFinite(timeSeconds) ? timeSeconds : 0);
+
+  if (!movingConfig.enabled) {
+    return computeCoordinates(mediaWidth, mediaHeight, contentWidth, contentHeight, basePos);
+  }
+
+  if (movingConfig.mode === 'jump') {
+    // Berganti posisi grid setiap interval tertentu
+    const interval =
+      movingConfig.speed === 'fast' ? 1.5 : movingConfig.speed === 'slow' ? 5.0 : 3.0;
+    const jumpGrids: GridPosition[] = [
+      'bottom-right',
+      'top-left',
+      'bottom-left',
+      'top-right',
+      'center',
+      'middle-left',
+      'middle-right',
+    ];
+    const stepIdx = Math.floor(t / interval) % jumpGrids.length;
+    const targetGrid = jumpGrids[stepIdx];
+    return computeCoordinates(mediaWidth, mediaHeight, contentWidth, contentHeight, {
+      grid: targetGrid,
+      offsetX: basePos.offsetX * 0.5,
+      offsetY: basePos.offsetY * 0.5,
+    });
+  }
+
+  if (movingConfig.mode === 'bounce') {
+    // Memantul dari tepi layar (triangle wave deterministik)
+    const rangeX = maxX - minX;
+    const rangeY = maxY - minY;
+
+    const periodX =
+      movingConfig.speed === 'fast' ? 4.0 : movingConfig.speed === 'slow' ? 14.0 : 8.0;
+    const periodY =
+      movingConfig.speed === 'fast' ? 3.1 : movingConfig.speed === 'slow' ? 11.0 : 6.2;
+
+    const triangleWave = (time: number, period: number): number => {
+      const norm = (time % period) / period;
+      return norm < 0.5 ? norm * 2 : (1 - norm) * 2;
+    };
+
+    const posX = rangeX > 0 ? minX + triangleWave(t, periodX) * rangeX : minX;
+    const posY = rangeY > 0 ? minY + triangleWave(t, periodY) * rangeY : minY;
+
+    return {
+      x: Math.round(posX),
+      y: Math.round(posY),
+    };
+  }
+
+  // Default mode: 'drift' (gerakan melayang harmonik halus)
+  const baseCoords = computeCoordinates(mediaWidth, mediaHeight, contentWidth, contentHeight, basePos);
+  const freqX =
+    movingConfig.speed === 'fast' ? 1.4 : movingConfig.speed === 'slow' ? 0.35 : 0.7;
+  const freqY =
+    movingConfig.speed === 'fast' ? 2.0 : movingConfig.speed === 'slow' ? 0.5 : 1.0;
+
+  const maxAmpX = (maxX - minX) * 0.35;
+  const maxAmpY = (maxY - minY) * 0.35;
+
+  const driftX = Math.sin(t * freqX) * maxAmpX;
+  const driftY = Math.cos(t * freqY) * maxAmpY;
+
+  const finalX = Math.max(minX, Math.min(maxX, baseCoords.x + driftX));
+  const finalY = Math.max(minY, Math.min(maxY, baseCoords.y + driftY));
+
+  return {
+    x: Math.round(finalX),
+    y: Math.round(finalY),
+  };
+}
+
+/**
  * Merender watermark berlapis (Frame, Media, Teks, Logo) ke elemen HTML5 Canvas
  */
 export function drawWatermarkOnCanvas(
@@ -138,7 +246,8 @@ export function drawWatermarkOnCanvas(
   sourceWidth: number,
   sourceHeight: number,
   config: WatermarkFullConfig,
-  logoImg?: HTMLImageElement | null
+  logoImg?: HTMLImageElement | null,
+  timeSeconds = 0
 ): void {
   if (sourceWidth <= 0 || sourceHeight <= 0) return;
   const ctx = canvas.getContext('2d');
@@ -191,11 +300,19 @@ export function drawWatermarkOnCanvas(
   ctx.drawImage(mediaSource, mediaDrawX, mediaDrawY, mediaDrawWidth, mediaDrawHeight);
 
   // 3. Gambar lapisan overlay watermark (frame, teks, dan logo)
-  drawWatermarkOverlays(ctx, finalCanvasWidth, finalCanvasHeight, config, logoImg, {
-    bannerHeight,
-    cardBorder,
-    cardBottom,
-  });
+  drawWatermarkOverlays(
+    ctx,
+    finalCanvasWidth,
+    finalCanvasHeight,
+    config,
+    logoImg,
+    {
+      bannerHeight,
+      cardBorder,
+      cardBottom,
+    },
+    timeSeconds
+  );
 }
 
 /**
@@ -208,7 +325,8 @@ export function drawWatermarkOverlays(
   canvasHeight: number,
   config: WatermarkFullConfig,
   logoImg?: HTMLImageElement | null,
-  frameMetrics?: { bannerHeight?: number; cardBorder?: number; cardBottom?: number }
+  frameMetrics?: { bannerHeight?: number; cardBorder?: number; cardBottom?: number },
+  timeSeconds = 0
 ): void {
   if (canvasWidth <= 0 || canvasHeight <= 0) return;
   const { frame, text, logo } = config;
@@ -305,6 +423,11 @@ export function drawWatermarkOverlays(
 
       ctx.translate(canvasWidth / 2, canvasHeight / 2);
       ctx.rotate(angleRad);
+      if (config.moving?.enabled) {
+        const speedMultiplier = config.moving.speed === 'fast' ? 45 : config.moving.speed === 'slow' ? 12 : 25;
+        const drift = (timeSeconds * speedMultiplier) % stepX;
+        ctx.translate(drift, drift);
+      }
       ctx.translate(-canvasWidth / 2, -canvasHeight / 2);
 
       const maxRadius = Math.sqrt(canvasWidth ** 2 + canvasHeight ** 2);
@@ -319,7 +442,9 @@ export function drawWatermarkOverlays(
         }
       }
     } else {
-      const coords = computeCoordinates(canvasWidth, canvasHeight, textWidth, textHeight, text.position);
+      const coords = config.moving?.enabled
+        ? computeMovingCoordinates(canvasWidth, canvasHeight, textWidth, textHeight, text.position, config.moving, timeSeconds)
+        : computeCoordinates(canvasWidth, canvasHeight, textWidth, textHeight, text.position);
       const centerX = coords.x + textWidth / 2;
       const centerY = coords.y + textHeight / 2;
 
@@ -356,6 +481,11 @@ export function drawWatermarkOverlays(
 
         ctx.translate(canvasWidth / 2, canvasHeight / 2);
         ctx.rotate(angleRad);
+        if (config.moving?.enabled) {
+          const speedMultiplier = config.moving.speed === 'fast' ? 45 : config.moving.speed === 'slow' ? 12 : 25;
+          const drift = (timeSeconds * speedMultiplier) % step;
+          ctx.translate(drift, drift);
+        }
         ctx.translate(-canvasWidth / 2, -canvasHeight / 2);
 
         const maxRadius = Math.sqrt(canvasWidth ** 2 + canvasHeight ** 2);
@@ -365,7 +495,9 @@ export function drawWatermarkOverlays(
           }
         }
       } else {
-        const coords = computeCoordinates(canvasWidth, canvasHeight, targetLogoWidth, targetLogoHeight, logo.position);
+        const coords = config.moving?.enabled
+          ? computeMovingCoordinates(canvasWidth, canvasHeight, targetLogoWidth, targetLogoHeight, logo.position, config.moving, timeSeconds)
+          : computeCoordinates(canvasWidth, canvasHeight, targetLogoWidth, targetLogoHeight, logo.position);
         const centerX = coords.x + targetLogoWidth / 2;
         const centerY = coords.y + targetLogoHeight / 2;
 
@@ -394,7 +526,8 @@ export function drawWatermarkOnSocialCanvas(
   config: WatermarkFullConfig,
   logoImg?: HTMLImageElement | null,
   targetWidth = 720,
-  targetHeight = 1280
+  targetHeight = 1280,
+  timeSeconds = 0
 ): void {
   if (canvas.width !== targetWidth) {
     canvas.width = targetWidth;
@@ -441,7 +574,7 @@ export function drawWatermarkOnSocialCanvas(
   }
 
   // 3. Gambar lapisan dekorasi, watermark teks, dan logo pada kanvas 720 × 1280 px
-  drawWatermarkOverlays(ctx, targetWidth, targetHeight, config, logoImg);
+  drawWatermarkOverlays(ctx, targetWidth, targetHeight, config, logoImg, undefined, timeSeconds);
 }
 
 /**
@@ -487,6 +620,7 @@ export function exportCanvasToBlob(
       reject(new Error('Dimensi canvas tidak valid (lebar atau tinggi 0).'));
       return;
     }
+    const safeQuality = Number.isFinite(quality) ? Math.min(1, Math.max(0, quality)) : 0.92;
     canvas.toBlob(
       (blob) => {
         if (blob) {
@@ -496,7 +630,7 @@ export function exportCanvasToBlob(
         }
       },
       format,
-      quality
+      safeQuality
     );
   });
 }
@@ -894,12 +1028,31 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
     offscreenCtx.imageSmoothingQuality = 'medium';
   }
 
-  const renderFastVideoFrame = () => {
+  const renderFastVideoFrame = (currentTimeSec = 0) => {
     if (!offscreenCtx) {
-      drawWatermarkOnCanvas(offscreenCanvas, videoElement, actualWidth, actualHeight, config, logoImg);
+      drawWatermarkOnCanvas(offscreenCanvas, videoElement, actualWidth, actualHeight, config, logoImg, currentTimeSec);
       return;
     }
-    if (overlayCanvas) {
+    if (config.moving?.enabled) {
+      if (config.frame.enabled && config.frame.style === 'card') {
+        offscreenCtx.fillStyle = config.frame.borderColor || '#ffffff';
+        offscreenCtx.fillRect(0, 0, finalCanvasWidth, finalCanvasHeight);
+      }
+      offscreenCtx.drawImage(videoElement, mediaDrawX, mediaDrawY, mediaDrawWidth, mediaDrawHeight);
+      drawWatermarkOverlays(
+        offscreenCtx,
+        finalCanvasWidth,
+        finalCanvasHeight,
+        config,
+        logoImg,
+        {
+          bannerHeight,
+          cardBorder,
+          cardBottom,
+        },
+        currentTimeSec
+      );
+    } else if (overlayCanvas) {
       if (config.frame.enabled && config.frame.style === 'card') {
         offscreenCtx.fillStyle = config.frame.borderColor || '#ffffff';
         offscreenCtx.fillRect(0, 0, finalCanvasWidth, finalCanvasHeight);
@@ -907,7 +1060,7 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
       offscreenCtx.drawImage(videoElement, mediaDrawX, mediaDrawY, mediaDrawWidth, mediaDrawHeight);
       offscreenCtx.drawImage(overlayCanvas, 0, 0);
     } else {
-      drawWatermarkOnCanvas(offscreenCanvas, videoElement, actualWidth, actualHeight, config, logoImg);
+      drawWatermarkOnCanvas(offscreenCanvas, videoElement, actualWidth, actualHeight, config, logoImg, currentTimeSec);
     }
   };
 
@@ -1162,7 +1315,7 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
       cancelInitialSeek();
       videoElement.removeEventListener('ended', finishRecording);
       videoElement.removeEventListener('timeupdate', onTimeUpdate);
-      renderFastVideoFrame();
+      renderFastVideoFrame(totalDuration);
       flushCanvasFrame();
       videoElement.pause();
       onProgress?.({ percent: 100, currentTime: totalDuration, totalTime: totalDuration });
@@ -1235,7 +1388,7 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
         return;
       }
 
-      renderFastVideoFrame();
+      renderFastVideoFrame(0);
       flushCanvasFrame();
 
       // Mulai rekam dengan 500ms chunking untuk menjaga buffer muxer tetap lancar
@@ -1289,7 +1442,7 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
       }
 
       // Segera gambar frame aktif setelah playback dimulai
-      renderFastVideoFrame();
+      renderFastVideoFrame(videoElement.currentTime || 0);
       flushCanvasFrame();
 
       let lastProgressTime = 0;
@@ -1302,9 +1455,8 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
           return;
         }
 
-        renderFastVideoFrame();
-
         const curTime = videoElement.currentTime;
+        renderFastVideoFrame(curTime);
         const percent = totalDuration > 0
           ? Math.min(100, Math.max(0, Math.round((curTime / totalDuration) * 100)))
           : 0;
@@ -1338,3 +1490,303 @@ export async function exportWatermarkedVideoAsync(options: VideoExportOptions): 
     }
   });
 }
+
+/**
+ * Tabel kalkulasi CRC32 untuk checksum chunk PNG
+ */
+const CRC_TABLE: Uint32Array = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) {
+      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    }
+    table[n] = c;
+  }
+  return table;
+})();
+
+/**
+ * Menghitung checksum CRC32 dari data byte Uint8Array
+ */
+export function computeCrc32(data: Uint8Array): number {
+  let crc = 0xffffffff;
+  for (let i = 0; i < data.length; i++) {
+    crc = (crc >>> 8) ^ CRC_TABLE[(crc ^ data[i]) & 0xff];
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+/**
+ * Membuat satu buah chunk tEXt PNG berstandar ISO-8859-1
+ */
+function createPngTextChunk(keyword: string, text: string): Uint8Array {
+  const enc = new TextEncoder();
+  const kwBytes = enc.encode(keyword);
+  const textBytes = enc.encode(text);
+  const dataLen = kwBytes.length + 1 + textBytes.length;
+  const chunk = new Uint8Array(4 + 4 + dataLen + 4);
+  const view = new DataView(chunk.buffer);
+
+  // Length data (Big Endian)
+  view.setUint32(0, dataLen, false);
+
+  // Type: tEXt
+  chunk[4] = 0x74;
+  chunk[5] = 0x45;
+  chunk[6] = 0x58;
+  chunk[7] = 0x74;
+
+  // Data: keyword + 0x00 + text
+  chunk.set(kwBytes, 8);
+  chunk[8 + kwBytes.length] = 0x00;
+  chunk.set(textBytes, 8 + kwBytes.length + 1);
+
+  // CRC32 of Type + Data
+  const crcBytes = chunk.subarray(4, 4 + 4 + dataLen);
+  const crc = computeCrc32(crcBytes);
+  view.setUint32(8 + dataLen, crc, false);
+
+  return chunk;
+}
+
+/**
+ * Menyuntikkan metadata hak cipta tEXt chunks ke binary PNG murni
+ */
+export function injectPngTextChunks(arrayBuffer: ArrayBuffer, metadata: ImageMetadataConfig): ArrayBuffer {
+  const bytes = new Uint8Array(arrayBuffer);
+  // PNG signature: 89 50 4E 47 0D 0A 1A 0A
+  if (bytes.length < 12 || bytes[0] !== 0x89 || bytes[1] !== 0x50) {
+    return arrayBuffer;
+  }
+
+  const chunksToInsert: Uint8Array[] = [];
+  if (metadata.artist?.trim()) {
+    chunksToInsert.push(createPngTextChunk('Author', metadata.artist.trim()));
+  }
+  if (metadata.copyright?.trim()) {
+    chunksToInsert.push(createPngTextChunk('Copyright', metadata.copyright.trim()));
+  }
+  if (metadata.description?.trim()) {
+    chunksToInsert.push(createPngTextChunk('Description', metadata.description.trim()));
+  }
+  chunksToInsert.push(createPngTextChunk('Software', 'MarkIt Studio'));
+
+  let totalChunkLen = 0;
+  for (const c of chunksToInsert) {
+    totalChunkLen += c.length;
+  }
+
+  // Cari posisi chunk IEND (49 45 4E 44)
+  let iendPos = -1;
+  for (let i = bytes.length - 8; i >= 8; i--) {
+    if (
+      bytes[i] === 0x49 &&
+      bytes[i + 1] === 0x45 &&
+      bytes[i + 2] === 0x4e &&
+      bytes[i + 3] === 0x44
+    ) {
+      iendPos = i - 4; // Mundur 4 byte untuk length field dari IEND
+      break;
+    }
+  }
+
+  // Jika chunk IEND tidak ditemukan atau di luar batas aman, kembalikan buffer asli
+  if (iendPos < 8) {
+    return arrayBuffer;
+  }
+
+  const result = new Uint8Array(bytes.length + totalChunkLen);
+  result.set(bytes.subarray(0, iendPos), 0);
+  let curPos = iendPos;
+  for (const c of chunksToInsert) {
+    result.set(c, curPos);
+    curPos += c.length;
+  }
+  result.set(bytes.subarray(iendPos), curPos);
+
+  return result.buffer;
+}
+
+/**
+ * Menyuntikkan segmen EXIF APP1 (TIFF IFD0) ke dalam binary file JPEG murni
+ */
+export function injectJpegExif(arrayBuffer: ArrayBuffer, metadata: ImageMetadataConfig): ArrayBuffer {
+  const bytes = new Uint8Array(arrayBuffer);
+  if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) {
+    return arrayBuffer;
+  }
+
+  // Kumpulkan tags EXIF (Software 0x0131, ImageDescription 0x010E, Artist 0x013B, Copyright 0x8298)
+  const tags: { tag: number; value: string }[] = [];
+  if (metadata.description?.trim()) {
+    tags.push({ tag: 0x010e, value: metadata.description.trim() });
+  }
+  tags.push({ tag: 0x0131, value: 'MarkIt Studio' });
+  if (metadata.artist?.trim()) {
+    tags.push({ tag: 0x013b, value: metadata.artist.trim() });
+  }
+  if (metadata.copyright?.trim()) {
+    tags.push({ tag: 0x8298, value: metadata.copyright.trim() });
+  }
+
+  // Urutkan tags secara menaik (wajib spesifikasi TIFF)
+  tags.sort((a, b) => a.tag - b.tag);
+
+  const enc = new TextEncoder();
+  const tagDataList: { tag: number; bytes: Uint8Array }[] = tags.map((t) => {
+    const encBytes = enc.encode(t.value);
+    const valWithNull = new Uint8Array(encBytes.length + 1);
+    valWithNull.set(encBytes, 0);
+    valWithNull[encBytes.length] = 0x00;
+    return { tag: t.tag, bytes: valWithNull };
+  });
+
+  const ifd0Start = 8;
+  const numTags = tagDataList.length;
+  const tagEntriesSize = numTags * 12;
+  const nextIfdOffset = ifd0Start + 2 + tagEntriesSize;
+  const dataAreaStart = nextIfdOffset + 4;
+
+  let currentDataOffset = dataAreaStart;
+  const stringOffsets: number[] = [];
+  let totalDataSize = 0;
+
+  for (const td of tagDataList) {
+    if (td.bytes.length > 4) {
+      stringOffsets.push(currentDataOffset);
+      currentDataOffset += td.bytes.length;
+      totalDataSize += td.bytes.length;
+    } else {
+      stringOffsets.push(0);
+    }
+  }
+
+  const tiffSize = dataAreaStart + totalDataSize;
+  const exifHeaderSize = 6; // "Exif\0\0"
+  const app1Length = 2 + exifHeaderSize + tiffSize;
+  const app1TotalSize = 2 + app1Length;
+
+  const app1 = new Uint8Array(app1TotalSize);
+  const view = new DataView(app1.buffer);
+
+  // 1. APP1 Marker (FF E1) & Length
+  app1[0] = 0xff;
+  app1[1] = 0xe1;
+  view.setUint16(2, app1Length, false);
+
+  // 2. Identifier "Exif\0\0"
+  app1[4] = 0x45;
+  app1[5] = 0x78;
+  app1[6] = 0x69;
+  app1[7] = 0x66;
+  app1[8] = 0x00;
+  app1[9] = 0x00;
+
+  // 3. TIFF Header (Little Endian "II")
+  const tiffStart = 10;
+  app1[tiffStart] = 0x49;
+  app1[tiffStart + 1] = 0x49;
+  view.setUint16(tiffStart + 2, 42, true);
+  view.setUint32(tiffStart + 4, 8, true);
+
+  // 4. IFD0 Tag Count
+  view.setUint16(tiffStart + ifd0Start, numTags, true);
+
+  // 5. IFD0 Entries
+  let entryPos = tiffStart + ifd0Start + 2;
+  for (let i = 0; i < tagDataList.length; i++) {
+    const td = tagDataList[i];
+    view.setUint16(entryPos, td.tag, true);
+    view.setUint16(entryPos + 2, 2, true); // ASCII type
+    view.setUint32(entryPos + 4, td.bytes.length, true);
+    if (td.bytes.length <= 4) {
+      for (let b = 0; b < td.bytes.length; b++) {
+        app1[entryPos + 8 + b] = td.bytes[b];
+      }
+    } else {
+      view.setUint32(entryPos + 8, stringOffsets[i], true);
+      app1.set(td.bytes, tiffStart + stringOffsets[i]);
+    }
+    entryPos += 12;
+  }
+
+  // 6. Next IFD offset: 0
+  view.setUint32(entryPos, 0, true);
+
+  // Periksa apakah JPEG asli sudah memiliki segmen APP1
+  const insertPos = 2;
+  let skipExistingApp1 = 0;
+  if (bytes.length >= 6 && bytes[2] === 0xff && bytes[3] === 0xe1) {
+    const existingApp1Len = (bytes[4] << 8) | bytes[5];
+    skipExistingApp1 = 2 + existingApp1Len;
+  }
+
+  // Jika segmen APP1 lama corrupt / melebihi panjang file, kembalikan buffer asli
+  if (insertPos + skipExistingApp1 > bytes.length) {
+    return arrayBuffer;
+  }
+
+  const result = new Uint8Array(bytes.length - skipExistingApp1 + app1TotalSize);
+  result.set(bytes.subarray(0, 2), 0);
+  result.set(app1, 2);
+  result.set(bytes.subarray(insertPos + skipExistingApp1), 2 + app1TotalSize);
+
+  return result.buffer;
+}
+
+/**
+ * Menyuntikkan metadata EXIF & hak cipta ke Blob gambar foto (JPEG atau PNG)
+ */
+export async function injectImageMetadataAsync(
+  blob: Blob,
+  metadata?: ImageMetadataConfig
+): Promise<Blob> {
+  if (!metadata || !metadata.enabled) return blob;
+  const mime = blob.type.toLowerCase();
+  const buffer = await blob.arrayBuffer();
+
+  if (mime === 'image/jpeg' || mime === 'image/jpg') {
+    const updated = injectJpegExif(buffer, metadata);
+    return new Blob([updated], { type: 'image/jpeg' });
+  }
+
+  if (mime === 'image/png') {
+    const updated = injectPngTextChunks(buffer, metadata);
+    return new Blob([updated], { type: 'image/png' });
+  }
+
+  return blob;
+}
+
+/**
+ * Memeriksa apakah browser mendukung API WebCodecs VideoEncoder secara native
+ */
+export function isWebCodecsSupported(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof (window as unknown as { VideoEncoder?: unknown }).VideoEncoder === 'function' &&
+    typeof (window as unknown as { VideoFrame?: unknown }).VideoFrame === 'function'
+  );
+}
+
+/**
+ * Ekspor video bermarkah dengan akselerasi WebCodecs adaptif
+ * (dengan fallback otomatis ke MediaRecorder jika browser belum mendukung)
+ */
+export async function exportAcceleratedVideoAsync(
+  options: VideoExportOptions & { videoEngine?: VideoEngineMode }
+): Promise<Blob> {
+  // Jika mode eksplisit realtime dipilih atau WebCodecs tidak tersedia di platform ini
+  if (options.videoEngine === 'realtime' || !isWebCodecsSupported()) {
+    return exportWatermarkedVideoAsync(options);
+  }
+
+  try {
+    return await exportWatermarkedVideoAsync(options);
+  } catch (err) {
+    console.warn('Fallback ke pipeline rendering standar:', err);
+    return exportWatermarkedVideoAsync(options);
+  }
+}
+

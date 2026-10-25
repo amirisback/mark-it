@@ -14,8 +14,9 @@ import {
   loadImageAsync,
   exportCanvasToBlob,
   triggerFileDownload,
-  exportWatermarkedVideoAsync,
+  exportAcceleratedVideoAsync,
   captureNativeVideoFrameAsync,
+  injectImageMetadataAsync,
 } from '@/lib/watermark-engine';
 import { BatchTray } from './batch-tray';
 import { CanvasViewer } from './canvas-viewer';
@@ -36,7 +37,14 @@ export function StudioWorkspace() {
     videoQuality: 'maximum',
     videoQualityProfile: 'maximum',
     videoFps: 60,
+    videoEngine: 'auto',
     customPrefix: 'watermarked_',
+    metadata: {
+      enabled: false,
+      artist: '',
+      copyright: '© 2026 MarkIt Studio',
+      description: 'Watermarked with MarkIt Studio',
+    },
   });
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [progressText, setProgressText] = useState<string>('');
@@ -281,6 +289,9 @@ export function StudioWorkspace() {
         text: preset.config.text ? { ...prev.text, ...preset.config.text } : prev.text,
         logo: preset.config.logo ? { ...prev.logo, ...preset.config.logo } : prev.logo,
         frame: preset.config.frame ? { ...prev.frame, ...preset.config.frame } : prev.frame,
+        moving: preset.config.moving
+          ? { ...DEFAULT_WATERMARK_CONFIG.moving, ...preset.config.moving }
+          : { ...prev.moving, enabled: false },
       };
     });
   }, []);
@@ -352,6 +363,7 @@ export function StudioWorkspace() {
           exportSettings.format,
           exportSettings.quality
         );
+        const finalBlob = await injectImageMetadataAsync(blob, exportSettings.metadata);
         const extension =
           exportSettings.format === 'image/png'
             ? '.png'
@@ -359,7 +371,7 @@ export function StudioWorkspace() {
             ? '.jpg'
             : '.webp';
         const cleanName = activeItem.name.replace(/\.[^/.]+$/, '');
-        triggerFileDownload(blob, `${exportSettings.customPrefix}${cleanName}${extension}`);
+        triggerFileDownload(finalBlob, `${exportSettings.customPrefix}${cleanName}${extension}`);
       } else if (activeItem.type === 'video') {
         if (exportSettings.videoMode === 'single_frame') {
           // Single frame image capture directly from native video buffer
@@ -377,6 +389,7 @@ export function StudioWorkspace() {
             activeItem.width,
             activeItem.height
           );
+          const finalBlob = await injectImageMetadataAsync(blob, exportSettings.metadata);
           const extension =
             exportSettings.format === 'image/png'
               ? '.png'
@@ -384,7 +397,7 @@ export function StudioWorkspace() {
               ? '.jpg'
               : '.webp';
           const cleanName = activeItem.name.replace(/\.[^/.]+$/, '');
-          triggerFileDownload(blob, `${exportSettings.customPrefix}${cleanName}_frame${extension}`);
+          triggerFileDownload(finalBlob, `${exportSettings.customPrefix}${cleanName}_frame${extension}`);
         } else {
           // Full video export with watermark & audio
           setProgressText('Memulai rendering video...');
@@ -393,7 +406,7 @@ export function StudioWorkspace() {
             throw new Error('Elemen pemutar video belum siap.');
           }
 
-          const blob = await exportWatermarkedVideoAsync({
+          const blob = await exportAcceleratedVideoAsync({
             videoElement: videoEl,
             sourceWidth: activeItem.width,
             sourceHeight: activeItem.height,
@@ -404,6 +417,7 @@ export function StudioWorkspace() {
             mimeType: exportSettings.videoFormat,
             qualityPreset:
               exportSettings.videoQuality || exportSettings.videoQualityProfile || 'maximum',
+            videoEngine: exportSettings.videoEngine,
             signal: abortController.signal,
             onProgress: (p) => {
               const elapsedSec = (Date.now() - startTime) / 1000;
@@ -477,7 +491,8 @@ export function StudioWorkspace() {
         const cleanName = item.name.replace(/\.[^/.]+$/, '');
         const itemStartTime = Date.now();
 
-        if (item.type === 'image') {
+        try {
+          if (item.type === 'image') {
           setProgressText(`Merender gambar ${i + 1}/${items.length}: ${item.name}`);
           const offscreenCanvas = document.createElement('canvas');
           const img = await loadImageAsync(item.objectUrl);
@@ -494,13 +509,14 @@ export function StudioWorkspace() {
             exportSettings.format,
             exportSettings.quality
           );
+          const finalBlob = await injectImageMetadataAsync(blob, exportSettings.metadata);
           const extension =
             exportSettings.format === 'image/png'
               ? '.png'
               : exportSettings.format === 'image/jpeg'
               ? '.jpg'
               : '.webp';
-          triggerFileDownload(blob, `${exportSettings.customPrefix}${cleanName}${extension}`);
+          triggerFileDownload(finalBlob, `${exportSettings.customPrefix}${cleanName}${extension}`);
         } else if (item.type === 'video') {
           const batchVideoUrl = item.file ? URL.createObjectURL(item.file) : item.objectUrl;
 
@@ -569,6 +585,7 @@ export function StudioWorkspace() {
                       v.videoWidth || item.width,
                       v.videoHeight || item.height
                     );
+                    const finalBlob = await injectImageMetadataAsync(blob, exportSettings.metadata);
                     const extension =
                       exportSettings.format === 'image/png'
                         ? '.png'
@@ -576,7 +593,7 @@ export function StudioWorkspace() {
                         ? '.jpg'
                         : '.webp';
                     triggerFileDownload(
-                      blob,
+                      finalBlob,
                       `${exportSettings.customPrefix}${cleanName}_frame${extension}`
                     );
                     isSettled = true;
@@ -694,7 +711,7 @@ export function StudioWorkspace() {
                 tempVideo.load();
               });
 
-              const blob = await exportWatermarkedVideoAsync({
+              const blob = await exportAcceleratedVideoAsync({
                 videoElement: tempVideo,
                 sourceWidth: tempVideo.videoWidth || item.width,
                 sourceHeight: tempVideo.videoHeight || item.height,
@@ -705,6 +722,7 @@ export function StudioWorkspace() {
                 mimeType: exportSettings.videoFormat,
                 qualityPreset:
                   exportSettings.videoQuality || exportSettings.videoQualityProfile || 'maximum',
+                videoEngine: exportSettings.videoEngine,
                 signal: abortController.signal,
                 onProgress: (p) => {
                   const elapsedSec = (Date.now() - itemStartTime) / 1000;
@@ -743,6 +761,13 @@ export function StudioWorkspace() {
               }
             }
           }
+        }
+      } catch (itemErr: unknown) {
+          if (itemErr instanceof DOMException && itemErr.name === 'AbortError') {
+            throw itemErr;
+          }
+          console.error(`Gagal memproses media batch [${item.name}]:`, itemErr);
+          setExportError(`Peringatan: Gagal memproses file ${item.name}. Memproses file lainnya...`);
         }
 
         // Small pause between browser download requests to prevent browser throttle

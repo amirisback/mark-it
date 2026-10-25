@@ -146,6 +146,25 @@
       "offsetX": "Horizontal Offset (X)",
       "offsetY": "Vertical Offset (Y)"
     },
+    "motion": {
+      "enable": "Enable Moving Watermark",
+      "subtitle": "Anti-AI inpainting protection for video media",
+      "pattern": "Motion Pattern",
+      "drift": "Smooth Wave Drift",
+      "bounce": "Bounce",
+      "jump": "Quadrant Jump",
+      "speed": "Motion Speed",
+      "slow": "Slow",
+      "medium": "Medium",
+      "fast": "Fast"
+    },
+    "metadata": {
+      "title": "EXIF & Image Copyright",
+      "enable": "Embed EXIF Copyright Metadata",
+      "artist": "Photographer / Author",
+      "copyright": "Copyright Notice",
+      "description": "Image Description"
+    },
     "presets": {
       "title": "Instant Preset Templates",
       "subtitle": "Apply curated watermark styles with a single click.",

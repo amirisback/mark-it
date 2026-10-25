@@ -81,10 +81,27 @@ export interface FrameWatermarkConfig {
   metaFontSize: number;
 }
 
+export type MovingWatermarkMode = 'drift' | 'bounce' | 'jump';
+export type MovingWatermarkSpeed = 'slow' | 'medium' | 'fast';
+
+export interface MovingWatermarkConfig {
+  enabled: boolean;
+  mode: MovingWatermarkMode;
+  speed: MovingWatermarkSpeed;
+}
+
+export interface ImageMetadataConfig {
+  enabled: boolean;
+  artist: string;
+  copyright: string;
+  description: string;
+}
+
 export interface WatermarkFullConfig {
   text: TextWatermarkConfig;
   logo: LogoWatermarkConfig;
   frame: FrameWatermarkConfig;
+  moving: MovingWatermarkConfig;
 }
 
 export interface WatermarkPreset {
@@ -97,6 +114,7 @@ export interface WatermarkPreset {
     text?: Partial<TextWatermarkConfig>;
     logo?: Partial<LogoWatermarkConfig>;
     frame?: Partial<FrameWatermarkConfig>;
+    moving?: Partial<MovingWatermarkConfig>;
   };
 }
 
@@ -115,6 +133,7 @@ export interface VideoBitrateConfig {
 }
 
 export type VideoFpsPreset = 30 | 60;
+export type VideoEngineMode = 'auto' | 'realtime' | 'webcodecs';
 
 export interface ExportSettings {
   format: ExportFormat;
@@ -124,7 +143,9 @@ export interface ExportSettings {
   videoQuality?: VideoQualityPreset;
   videoQualityProfile?: VideoQualityPreset;
   videoFps?: VideoFpsPreset;
+  videoEngine?: VideoEngineMode;
   customPrefix: string;
+  metadata?: ImageMetadataConfig;
 }
 
 export type FontCategory = 'modern-sans' | 'serif' | 'display' | 'script' | 'monospace';

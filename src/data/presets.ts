@@ -48,6 +48,11 @@ export const DEFAULT_WATERMARK_CONFIG: WatermarkFullConfig = {
     metaColor: '#ffffff',
     metaFontSize: 2.5,
   },
+  moving: {
+    enabled: false,
+    mode: 'drift',
+    speed: 'medium',
+  },
 };
 
 export const WATERMARK_PRESETS: WatermarkPreset[] = [
@@ -211,6 +216,34 @@ export const WATERMARK_PRESETS: WatermarkPreset[] = [
         position: { grid: 'top-left', offsetX: 8, offsetY: 16 },
       },
       frame: { enabled: false, style: 'none' },
+    },
+  },
+  {
+    id: 'anti-ai-dynamic',
+    name: 'Anti-AI Moving Watermark',
+    description: 'Watermark bergerak dinamis di video untuk mencegah penghapusan otomatis oleh AI inpainting & background scrapers.',
+    category: 'protection',
+    badge: 'Anti-AI',
+    config: {
+      text: {
+        enabled: true,
+        text: 'PROTECTED VIDEO • DO NOT SCRAPE',
+        fontSize: 3.8,
+        color: '#ffffff',
+        opacity: 0.75,
+        rotation: 0,
+        shadow: true,
+        shadowColor: '#000000',
+        shadowBlur: 6,
+        tile: false,
+        position: { grid: 'center', offsetX: 0, offsetY: 0 },
+      },
+      frame: { enabled: false, style: 'none' },
+      moving: {
+        enabled: true,
+        mode: 'drift',
+        speed: 'medium',
+      },
     },
   },
 ];

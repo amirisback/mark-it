@@ -23,7 +23,9 @@ export function Slider({
   onChange,
   className = '',
 }: SliderProps) {
-  const percentage = Math.min(100, Math.max(0, ((value - min) / (max - min)) * 100));
+  const denominator = max - min;
+  const percentage =
+    denominator > 0 ? Math.min(100, Math.max(0, ((value - min) / denominator) * 100)) : 0;
 
   const inputId = React.useId();
   return (

@@ -25,7 +25,7 @@ export interface InspectorPanelProps {
   onSocialFrameChange?: (frame: SocialFrameType) => void;
 }
 
-type TabKey = 'text' | 'logo' | 'frame' | 'position' | 'presets';
+type TabKey = 'text' | 'logo' | 'frame' | 'position' | 'motion' | 'presets';
 
 export function InspectorPanel({
   config,
@@ -57,6 +57,14 @@ export function InspectorPanel({
     onChange({
       ...config,
       frame: { ...config.frame, ...partial },
+    });
+  };
+
+  // Update moving partial
+  const updateMoving = (partial: Partial<WatermarkFullConfig['moving']>) => {
+    onChange({
+      ...config,
+      moving: { ...config.moving, ...partial },
     });
   };
 
@@ -148,6 +156,7 @@ export function InspectorPanel({
             { id: 'logo', label: 'Logo', icon: '🖼' },
             { id: 'frame', label: 'Bingkai', icon: '◻' },
             { id: 'position', label: 'Posisi', icon: '✛' },
+            { id: 'motion', label: 'Gerak AI', icon: '🎬' },
             { id: 'presets', label: 'Preset', icon: '✨' },
           ] as { id: TabKey; label: string; icon: string }[]
         ).map((tab) => {
@@ -759,6 +768,106 @@ export function InspectorPanel({
                 onChange={(offsetY) => updateOffsets(config.text.position.offsetX, offsetY)}
               />
             </div>
+          </div>
+        ) : null}
+
+        {/* TAB: MOTION / WATERMARK BERGERAK (ANTI-AI) */}
+        {activeTab === 'motion' ? (
+          <div className="space-y-4">
+            <Switch
+              label="Watermark Bergerak (Anti-AI Removal)"
+              description="Pergeseran posisi dinamis di video untuk menggagalkan pembersihan AI otomatis"
+              checked={config.moving.enabled}
+              onChange={(enabled) => updateMoving({ enabled })}
+            />
+
+            {config.moving.enabled ? (
+              <div className="space-y-4 pt-2 border-t border-border/50">
+                {/* Mode Gerakan */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-foreground/90">
+                    Gaya Gerakan (Motion Pattern)
+                  </label>
+                  <div className="grid grid-cols-1 gap-2">
+                    {[
+                      {
+                        id: 'drift',
+                        title: '🌊 Melayang Berombak (Smooth Drift)',
+                        desc: 'Pergeseran kurva sinusoidal harmonik halus di area aman',
+                      },
+                      {
+                        id: 'bounce',
+                        title: '🏀 Memantul (Bounce Screensaver)',
+                        desc: 'Memantul dari tepi layar secara konsisten',
+                      },
+                      {
+                        id: 'jump',
+                        title: '⚡ Lompat Sudut (Quadrant Jump)',
+                        desc: 'Berpindah kuadran/sudut secara periodik setiap beberapa detik',
+                      },
+                    ].map((m) => {
+                      const isSel = config.moving.mode === m.id;
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => updateMoving({ mode: m.id as 'drift' | 'bounce' | 'jump' })}
+                          className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
+                            isSel
+                              ? 'border-indigo-600 bg-indigo-500/10 text-foreground shadow-xs'
+                              : 'border-border/60 hover:border-border bg-secondary/20 hover:bg-secondary/40 text-muted-foreground'
+                          }`}
+                        >
+                          <div className="text-xs font-semibold text-foreground">{m.title}</div>
+                          <div className="text-[10px] text-muted-foreground mt-0.5">{m.desc}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Kecepatan Gerakan */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-foreground/90">
+                    Kecepatan Pergeseran
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { id: 'slow', label: 'Lambat (Subtle)' },
+                      { id: 'medium', label: 'Sedang (Normal)' },
+                      { id: 'fast', label: 'Cepat (Agresif)' },
+                    ].map((s) => {
+                      const isSel = config.moving.speed === s.id;
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => updateMoving({ speed: s.id as 'slow' | 'medium' | 'fast' })}
+                          className={`py-2 px-2 text-center text-xs font-medium rounded-lg border transition-all cursor-pointer ${
+                            isSel
+                              ? 'border-indigo-600 bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 font-semibold shadow-xs'
+                              : 'border-border/60 bg-secondary/20 text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          {s.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Anti-AI Information Box */}
+                <div className="p-3 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-xs space-y-1.5">
+                  <div className="flex items-center gap-1.5 font-semibold text-indigo-700 dark:text-indigo-300 text-[11px]">
+                    <span>🛡️ Proteksi Anti-Inpainting Video</span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground leading-relaxed">
+                    Software AI inpainting (seperti LaMa atau video cleaner) mengandalkan posisi watermark yang statis.
+                    Dengan pergeseran dinamis ini, koordinat watermark berubah terus-menerus sehingga sangat sulit dihapus.
+                  </p>
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
 

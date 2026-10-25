@@ -78,6 +78,7 @@ export function CanvasViewer({
 
     return () => {
       isCancelled = true;
+      setRawLogoImg(null);
     };
   }, [config.logo.enabled, config.logo.logoUrl]);
 
@@ -88,7 +89,8 @@ export function CanvasViewer({
       canvas: HTMLCanvasElement,
       source: HTMLImageElement | HTMLVideoElement,
       sourceWidth: number,
-      sourceHeight: number
+      sourceHeight: number,
+      timeSeconds = 0
     ) => {
       const effectiveConfig: WatermarkFullConfig = showOriginal
         ? {
@@ -96,6 +98,7 @@ export function CanvasViewer({
             text: { ...config.text, enabled: false },
             logo: { ...config.logo, enabled: false },
             frame: { ...config.frame, enabled: false },
+            moving: { ...config.moving, enabled: false },
           }
         : config;
 
@@ -108,7 +111,8 @@ export function CanvasViewer({
           effectiveConfig,
           logoImageElement,
           720,
-          1280
+          1280,
+          timeSeconds
         );
       } else if (previewRatio === '1:1') {
         drawWatermarkOnSocialCanvas(
@@ -119,7 +123,8 @@ export function CanvasViewer({
           effectiveConfig,
           logoImageElement,
           1080,
-          1080
+          1080,
+          timeSeconds
         );
       } else if (previewRatio === '16:9') {
         drawWatermarkOnSocialCanvas(
@@ -130,7 +135,8 @@ export function CanvasViewer({
           effectiveConfig,
           logoImageElement,
           1920,
-          1080
+          1080,
+          timeSeconds
         );
       } else {
         drawWatermarkOnCanvas(
@@ -139,7 +145,8 @@ export function CanvasViewer({
           sourceWidth,
           sourceHeight,
           effectiveConfig,
-          logoImageElement
+          logoImageElement,
+          timeSeconds
         );
       }
     },
@@ -178,8 +185,9 @@ export function CanvasViewer({
 
     const width = video.videoWidth || 640;
     const height = video.videoHeight || 360;
+    const time = video.currentTime || 0;
 
-    drawSourceByPreviewRatio(canvas, video, width, height);
+    drawSourceByPreviewRatio(canvas, video, width, height, time);
 
     if (onCanvasReady) onCanvasReady(canvas);
   }, [drawSourceByPreviewRatio, onCanvasReady]);

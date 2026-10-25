@@ -6,9 +6,11 @@ import type {
   VideoExportMode,
   VideoContainerFormat,
   VideoQualityPreset,
+  VideoEngineMode,
+  ImageMetadataConfig,
 } from '@/types/watermark';
 import { Button } from '@/components/ui/button';
-import { computeAdaptiveVideoBitrate } from '@/lib/watermark-engine';
+import { computeAdaptiveVideoBitrate, isWebCodecsSupported } from '@/lib/watermark-engine';
 
 export interface VideoProgressInfo {
   percent: number;
@@ -235,6 +237,25 @@ export function ExportBar({
                   </select>
                 </div>
 
+                {/* Video Engine Selection */}
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold text-foreground/90 text-xs">Engine:</span>
+                  <select
+                    value={settings.videoEngine || 'auto'}
+                    onChange={(e) => {
+                      onSettingsChange({
+                        ...settings,
+                        videoEngine: e.target.value as VideoEngineMode,
+                      });
+                    }}
+                    aria-label="Pilih engine rendering video"
+                    className="h-8 px-2.5 py-1 rounded-lg border border-border bg-background text-xs font-medium text-foreground shadow-2xs focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                  >
+                    <option value="auto">⚡ WebCodecs (Akselerasi Otomatis)</option>
+                    <option value="realtime">🎞️ MediaRecorder (Realtime Native)</option>
+                  </select>
+                </div>
+
                 {/* Dynamic Bitrate & Resolution Indicator Badge */}
                 {sourceWidth && sourceHeight ? (
                   <div
@@ -252,6 +273,12 @@ export function ExportBar({
                     <span className="font-bold">{bitrateMbps} Mbps</span>
                     <span className="text-muted-foreground/60">•</span>
                     <span>256kbps Audio</span>
+                    {typeof window !== 'undefined' && isWebCodecsSupported() ? (
+                      <>
+                        <span className="text-muted-foreground/60">•</span>
+                        <span className="text-emerald-600 dark:text-emerald-400 font-bold">⚡ WebCodecs Ready</span>
+                      </>
+                    ) : null}
                   </div>
                 ) : (
                   <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-medium">
@@ -360,6 +387,44 @@ export function ExportBar({
                     </select>
                   </div>
                 )}
+
+                {/* EXIF Metadata Stamp Toggle for Photos */}
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const prevMeta: ImageMetadataConfig = settings.metadata || {
+                        enabled: false,
+                        artist: '',
+                        copyright: '© 2026 MarkIt Studio',
+                        description: 'Watermarked with MarkIt Studio',
+                      };
+                      onSettingsChange({
+                        ...settings,
+                        metadata: {
+                          ...prevMeta,
+                          enabled: !prevMeta.enabled,
+                        },
+                      });
+                    }}
+                    className={`h-8 px-2.5 py-1 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition-all cursor-pointer ${
+                      settings.metadata?.enabled
+                        ? 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30 font-semibold shadow-2xs'
+                        : 'bg-background text-muted-foreground border-border hover:text-foreground'
+                    }`}
+                  >
+                    <span>📝 EXIF Hak Cipta</span>
+                    <span
+                      className={`text-[9px] px-1 py-0.5 rounded font-mono ${
+                        settings.metadata?.enabled
+                          ? 'bg-indigo-600 text-white font-bold'
+                          : 'bg-secondary text-muted-foreground'
+                      }`}
+                    >
+                      {settings.metadata?.enabled ? 'ON' : 'OFF'}
+                    </span>
+                  </button>
+                </div>
               </>
             )}
 
@@ -431,6 +496,68 @@ export function ExportBar({
           </div>
         </div>
       )}
+
+      {/* Collapsible EXIF Metadata Customizer for Photos */}
+      {!isProcessing && settings.metadata?.enabled && (!isVideo || settings.videoMode === 'single_frame') ? (
+        <div className="w-full mt-3 pt-3 border-t border-border/60 grid grid-cols-1 sm:grid-cols-3 gap-2.5 bg-secondary/10 p-2.5 rounded-lg text-xs">
+          <div className="space-y-1">
+            <label className="text-[11px] font-semibold text-foreground/80">Fotografer / Author (0x013B):</label>
+            <input
+              type="text"
+              value={settings.metadata.artist}
+              onChange={(e) =>
+                onSettingsChange({
+                  ...settings,
+                  metadata: {
+                    ...settings.metadata!,
+                    artist: e.target.value,
+                  },
+                })
+              }
+              placeholder="Nama Fotografer / Studio"
+              className="w-full h-7 px-2 text-xs rounded border border-border bg-background focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[11px] font-semibold text-foreground/80">Pernyataan Hak Cipta (0x8298):</label>
+            <input
+              type="text"
+              value={settings.metadata.copyright}
+              onChange={(e) =>
+                onSettingsChange({
+                  ...settings,
+                  metadata: {
+                    ...settings.metadata!,
+                    copyright: e.target.value,
+                  },
+                })
+              }
+              placeholder="© 2026 Hak Cipta Dilindungi"
+              className="w-full h-7 px-2 text-xs rounded border border-border bg-background focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[11px] font-semibold text-foreground/80">Deskripsi Media (0x010E):</label>
+            <input
+              type="text"
+              value={settings.metadata.description}
+              onChange={(e) =>
+                onSettingsChange({
+                  ...settings,
+                  metadata: {
+                    ...settings.metadata!,
+                    description: e.target.value,
+                  },
+                })
+              }
+              placeholder="Deskripsi foto / seri portofolio"
+              className="w-full h-7 px-2 text-xs rounded border border-border bg-background focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+            />
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

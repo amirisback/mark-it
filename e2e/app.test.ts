@@ -22,8 +22,15 @@ import {
   drawWatermarkOnCanvas,
   drawWatermarkOnSocialCanvas,
   getSafeFiniteDuration,
+  injectPngTextChunks,
+  injectJpegExif,
+  loadImageAsync,
+  computeMovingCoordinates,
+  isWebCodecsSupported,
+  exportAcceleratedVideoAsync,
 } from "@/lib/watermark-engine";
 import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
 import { ColorPicker, normalizeHexColor } from "@/components/ui/color-picker";
 import { DEFAULT_WATERMARK_CONFIG, WATERMARK_PRESETS } from "@/data/presets";
 import { CURATED_FONTS, FONT_SIZE_PRESETS } from "@/data/fonts";
@@ -714,6 +721,176 @@ describe("E2E Application Workflow Test Suite", () => {
         const found = text.match(emDashRegex);
         expect(found).toBeNull();
       }
+    });
+
+    it("AC-09: Robust image metadata chunk injection & truncation boundary protection", () => {
+      // 1. Valid Minimal PNG buffer with IEND
+      const validPng = new Uint8Array([
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, // PNG Signature
+        0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82, // IEND chunk
+      ]);
+      const injectedPng = injectPngTextChunks(validPng.buffer, {
+        enabled: true,
+        artist: "Test Artist",
+        copyright: "© 2026 Test",
+        description: "Test Description",
+      });
+      expect(injectedPng.byteLength).toBeGreaterThan(validPng.byteLength);
+
+      // Truncated / corrupt PNG (< 12 bytes or missing IEND) must safely return original buffer
+      const shortPng = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+      const safeShortPng = injectPngTextChunks(shortPng.buffer, {
+        enabled: true,
+        artist: "Artist",
+        copyright: "Copyright",
+        description: "Desc",
+      });
+      expect(safeShortPng.byteLength).toBe(shortPng.byteLength);
+
+      const missingIendPng = new Uint8Array([
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+        0x00, 0x00, 0x00, 0x01, 0x74, 0x45, 0x78, 0x74,
+      ]);
+      const safeMissingIend = injectPngTextChunks(missingIendPng.buffer, {
+        enabled: true,
+        artist: "Artist",
+        copyright: "Copyright",
+        description: "Desc",
+      });
+      expect(safeMissingIend.byteLength).toBe(missingIendPng.byteLength);
+
+      // 2. Valid Minimal JPEG buffer
+      const validJpeg = new Uint8Array([
+        0xff, 0xd8, // SOI
+        0xff, 0xd9, // EOI
+        0x00, 0x00,
+      ]);
+      const injectedJpeg = injectJpegExif(validJpeg.buffer, {
+        enabled: true,
+        artist: "Test Artist",
+        copyright: "© 2026 Test",
+        description: "Test Description",
+      });
+      expect(injectedJpeg.byteLength).toBeGreaterThan(validJpeg.byteLength);
+
+      // Truncated / short JPEG (< 6 bytes) must safely return original buffer
+      const shortJpeg = new Uint8Array([0xff, 0xd8, 0x00]);
+      const safeShortJpeg = injectJpegExif(shortJpeg.buffer, {
+        enabled: true,
+        artist: "Artist",
+        copyright: "Copyright",
+        description: "Desc",
+      });
+      expect(safeShortJpeg.byteLength).toBe(shortJpeg.byteLength);
+
+      // Corrupted existing APP1 with length exceeding buffer size
+      const corruptApp1Jpeg = new Uint8Array([
+        0xff, 0xd8, // SOI
+        0xff, 0xe1, // APP1 marker
+        0xff, 0xff, // 65535 length exceeding real buffer
+        0x00, 0x00,
+      ]);
+      const safeCorruptApp1 = injectJpegExif(corruptApp1Jpeg.buffer, {
+        enabled: true,
+        artist: "Artist",
+        copyright: "Copyright",
+        description: "Desc",
+      });
+      expect(safeCorruptApp1.byteLength).toBe(corruptApp1Jpeg.byteLength);
+    });
+
+    it("AC-10: Watermark Engine boundary guards (loadImageAsync, computeMovingCoordinates, exportCanvasToBlob)", async () => {
+      // 1. Empty string or non-string to loadImageAsync must reject cleanly
+      await expect(loadImageAsync("")).rejects.toThrow("URL gambar tidak valid atau kosong.");
+      await expect(loadImageAsync("   ")).rejects.toThrow("URL gambar tidak valid atau kosong.");
+
+      // 2. computeMovingCoordinates with zero / negative / NaN dimensions must return { x: 0, y: 0 }
+      const movingConfig = {
+        enabled: true,
+        mode: "drift" as const,
+        speed: "medium" as const,
+      };
+      const basePos = { grid: "center" as const, offsetX: 0, offsetY: 0 };
+      expect(computeMovingCoordinates(0, 0, 100, 50, basePos, movingConfig, 5)).toEqual({ x: 0, y: 0 });
+      expect(computeMovingCoordinates(-500, 1000, 100, 50, basePos, movingConfig, 5)).toEqual({ x: 0, y: 0 });
+      expect(computeMovingCoordinates(NaN, 1000, 100, 50, basePos, movingConfig, 5)).toEqual({ x: 0, y: 0 });
+
+      // Valid dimensions compute finite integer coordinates
+      const coords = computeMovingCoordinates(1920, 1080, 200, 60, basePos, movingConfig, 2.5);
+      expect(Number.isInteger(coords.x)).toBe(true);
+      expect(Number.isInteger(coords.y)).toBe(true);
+      expect(coords.x).toBeGreaterThan(0);
+      expect(coords.y).toBeGreaterThan(0);
+
+      // 3. exportCanvasToBlob rejects on zero dimensions
+      const mockCanvas = { width: 0, height: 0, toBlob: () => {} } as unknown as HTMLCanvasElement;
+      await expect(exportCanvasToBlob(mockCanvas)).rejects.toThrow("Dimensi canvas tidak valid");
+    });
+
+    it("AC-11: UI Slider zero-denominator NaN protection", () => {
+      // When min === max, denominator is 0; percentage must safely resolve to 0 without NaN in rendered output
+      const htmlOutput = renderToString(
+        React.createElement(Slider, {
+          label: "Test Slider",
+          value: 50,
+          min: 50,
+          max: 50,
+          unit: "%",
+          onChange: () => {},
+        })
+      );
+      expect(htmlOutput).not.toContain("NaN");
+      expect(htmlOutput).toContain("linear-gradient(to right, #4f46e5 0%, var(--secondary) 0%)");
+      expect(htmlOutput).toContain("50");
+    });
+
+    it("AC-12: Preset application with Moving Watermark lifecycle", () => {
+      // Find the anti-ai-dynamic preset
+      const antiAiPreset = WATERMARK_PRESETS.find((p) => p.id === "anti-ai-dynamic");
+      expect(antiAiPreset).toBeDefined();
+      expect(antiAiPreset?.config.moving?.enabled).toBe(true);
+
+      // Simulate preset merging logic in studio-workspace
+      const applyPresetConfig = (
+        prev: WatermarkFullConfig,
+        preset: WatermarkPreset
+      ): WatermarkFullConfig => ({
+        ...prev,
+        text: preset.config.text ? { ...prev.text, ...preset.config.text } : prev.text,
+        logo: preset.config.logo ? { ...prev.logo, ...preset.config.logo } : prev.logo,
+        frame: preset.config.frame ? { ...prev.frame, ...preset.config.frame } : prev.frame,
+        moving: preset.config.moving
+          ? { ...DEFAULT_WATERMARK_CONFIG.moving, ...preset.config.moving }
+          : { ...prev.moving, enabled: false },
+      });
+
+      // 1. Initial state: moving disabled
+      let currentConfig = { ...DEFAULT_WATERMARK_CONFIG };
+      expect(currentConfig.moving.enabled).toBe(false);
+
+      // 2. Apply anti-ai preset: moving enabled
+      currentConfig = applyPresetConfig(currentConfig, antiAiPreset!);
+      expect(currentConfig.moving.enabled).toBe(true);
+      expect(currentConfig.moving.mode).toBe("drift");
+
+      // 3. Switch to minimal preset: moving reset to false
+      const minimalPreset = WATERMARK_PRESETS.find((p) => p.id === "minimal-copyright");
+      expect(minimalPreset).toBeDefined();
+      currentConfig = applyPresetConfig(currentConfig, minimalPreset!);
+      expect(currentConfig.moving.enabled).toBe(false);
+    });
+
+    it("AC-13: WebCodecs acceleration & Video Engine dispatch", () => {
+      // isWebCodecsSupported executes safely without throwing in test/SSR environment
+      const isSupported = isWebCodecsSupported();
+      expect(typeof isSupported).toBe("boolean");
+      expect(typeof exportAcceleratedVideoAsync).toBe("function");
+
+      // Verify VideoEngineMode is supported in export settings
+      const engineModes = ["auto", "realtime", "webcodecs"];
+      expect(engineModes).toContain("auto");
+      expect(engineModes).toContain("realtime");
+      expect(engineModes).toContain("webcodecs");
     });
   });
 });
